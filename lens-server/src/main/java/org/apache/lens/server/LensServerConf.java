@@ -18,31 +18,56 @@
  */
 package org.apache.lens.server;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 
 /**
  * The Class LensServerConf.
  */
-public class LensServerConf {
+public final class LensServerConf {
+  private LensServerConf() {
 
-  /** The conf. */
-  public static HiveConf conf;
+  }
+
+  private static final class ConfHolder {
+    public static final HiveConf HIVE_CONF = new HiveConf();
+    // configuration object which does not load defaults and loads only lens*.xml files.
+    public static final Configuration CONF = new Configuration(false);
+
+    static {
+      HIVE_CONF.addResource("lensserver-default.xml");
+      HIVE_CONF.addResource("lens-site.xml");
+      CONF.addResource("lensserver-default.xml");
+      CONF.addResource("lens-site.xml");
+    }
+  }
 
   /**
-   * Gets the.
+   * The HiveConf object with lensserver-default.xml and lens-site.xml added.
    *
    * @return the hive conf
    */
-  public static HiveConf get() {
-    if (conf == null) {
-      synchronized (LensServerConf.class) {
-        if (conf == null) {
-          conf = new HiveConf();
-          conf.addResource("lensserver-default.xml");
-          conf.addResource("lens-site.xml");
-        }
-      }
-    }
-    return conf;
+  public static HiveConf getHiveConf() {
+    return ConfHolder.HIVE_CONF;
+  }
+
+  /**
+   * The configuration object which does not load any defaults and loads only lens*.xml files. This is passed to
+   * all drivers in configure
+   *
+   * @return the conf
+   */
+  public static Configuration getConf() {
+    return ConfHolder.CONF;
+  }
+
+  /**
+   * Creates a new configuration object from Server HiveConf, Creation should would be called usually from tests
+   * to modify some configurations.
+   *
+   * @return
+   */
+  public static HiveConf createHiveConf() {
+    return new HiveConf(ConfHolder.HIVE_CONF);
   }
 }

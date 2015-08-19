@@ -18,12 +18,15 @@
  */
 package org.apache.lens.server.stats;
 
-import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hive.service.AbstractService;
 import org.apache.lens.server.EventServiceImpl;
 import org.apache.lens.server.LensServices;
 import org.apache.lens.server.api.LensConfConstants;
+import org.apache.lens.server.api.events.LensEventService;
 import org.apache.lens.server.stats.store.StatisticsStore;
+
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hive.service.AbstractService;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,8 +47,7 @@ public class StatisticsService extends AbstractService {
   /**
    * Instantiates a new statistics service.
    *
-   * @param name
-   *          the name
+   * @param name the name
    */
   public StatisticsService(String name) {
     super(STATS_SVC_NAME);
@@ -53,7 +55,7 @@ public class StatisticsService extends AbstractService {
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see org.apache.hive.service.AbstractService#init(org.apache.hadoop.hive.conf.HiveConf)
    */
   @Override
@@ -77,14 +79,13 @@ public class StatisticsService extends AbstractService {
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see org.apache.hive.service.AbstractService#start()
    */
   @Override
   public synchronized void start() {
     if (store != null) {
-      store.start((org.apache.lens.server.api.events.LensEventService) LensServices.get().getService(
-          EventServiceImpl.NAME));
+      store.start(LensServices.get().<EventServiceImpl>getService(LensEventService.NAME));
     } else {
       LOG.warn("Unable to start the LogStore.");
     }
@@ -94,14 +95,13 @@ public class StatisticsService extends AbstractService {
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see org.apache.hive.service.AbstractService#stop()
    */
   @Override
   public synchronized void stop() {
     if (store != null) {
-      store.stop((org.apache.lens.server.api.events.LensEventService) LensServices.get().getService(
-          EventServiceImpl.NAME));
+      store.stop(LensServices.get().<EventServiceImpl>getService(LensEventService.NAME));
     } else {
       LOG.warn("Not starting the LogStore as it was not started.");
     }

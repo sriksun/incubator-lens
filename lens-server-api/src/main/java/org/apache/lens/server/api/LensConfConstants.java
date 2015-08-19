@@ -18,7 +18,7 @@
  */
 package org.apache.lens.server.api;
 
-import org.apache.lens.api.LensException;
+import org.apache.lens.server.api.error.LensException;
 
 /**
  * The Class LensConfConstants.
@@ -55,7 +55,15 @@ public final class LensConfConstants {
    * The Constant DRIVER_CLASSES.
    */
   public static final String DRIVER_CLASSES = SERVER_PFX + "drivers";
+  /**
+   * The Constant DRIVER_SELECTOR_CLASS.
+   */
+  public static final String DRIVER_SELECTOR_CLASS = SERVER_PFX + "driver.selector.class";
+  /**
+   * The Constant ACCEPTOR_CLASSES.
+   */
 
+  public static final String ACCEPTOR_CLASSES = SERVER_PFX + "query.acceptors";
   /**
    * The Constant SERVICE_NAMES.
    */
@@ -165,6 +173,16 @@ public final class LensConfConstants {
    * The Constant SESSION_TIMEOUT_SECONDS_DEFAULT.
    */
   public static final long SESSION_TIMEOUT_SECONDS_DEFAULT = 1440 * 60; // Default is one day
+
+  /**
+   * The Constant
+   */
+  public static final String SERVER_UI_ENABLE = SERVER_PFX + "ui.enable";
+
+  /**
+   * The Constant
+   */
+  public static final boolean DEFAULT_SERVER_UI_ENABLE = true;
 
   /**
    * The Constant SERVER_UI_URI.
@@ -385,6 +403,16 @@ public final class LensConfConstants {
   public static final String NATIVE_TABLE_NAME = METASTORE_PFX + "native.table.name";
 
   /**
+   * The Constant ES_INDEX_NAME.
+   */
+  public static final String ES_INDEX_NAME = METASTORE_PFX + "es.index.name";
+
+  /**
+   * The Constant ES_TYPE_NAME.
+   */
+  public static final String ES_TYPE_NAME = METASTORE_PFX + "es.type.name";
+
+  /**
    * Gets the service impl conf key.
    *
    * @param sName the s name
@@ -439,6 +467,12 @@ public final class LensConfConstants {
    */
   public static final String ENABLE_CONSOLE_METRICS = SERVER_PFX + "enable.console.metrics";
 
+  /** Whether to enable CSV metrics */
+  public static final String ENABLE_CSV_METRICS = SERVER_PFX + "enable.csv.metrics";
+
+  /** The directory in which to send CSV metrics */
+  public static final String CSV_METRICS_DIRECTORY_PATH = SERVER_PFX + "metrics.csv.directory.path";
+
   /**
    * The Constant ENABLE_GANGLIA_METRICS.
    */
@@ -453,6 +487,24 @@ public final class LensConfConstants {
    * The Constant GANGLIA_PORT.
    */
   public static final String GANGLIA_PORT = SERVER_PFX + "metrics.ganglia.port";
+
+  /** default ganglia port */
+  public static final int DEFAULT_GANGLIA_PORT = 8080;
+
+  /** whether to report metrics to graphite or not */
+  public static final String ENABLE_GRAPHITE_METRICS = SERVER_PFX + "enable.graphite.metrics";
+
+  /** graphite server hostname */
+  public static final String GRAPHITE_SERVERNAME = SERVER_PFX + "metrics.graphite.host";
+
+  /** graphite server port */
+  public static final String GRAPHITE_PORT = SERVER_PFX + "metrics.graphite.port";
+
+  /** default graphite port */
+  public static final int DEFAULT_GRAPHITE_PORT = 8080;
+
+  /** whether to enable per resource method metering */
+  public static final String ENABLE_RESOURCE_METHOD_METERING = SERVER_PFX + "enable.resource.method.metering";
 
   /**
    * The Constant REPORTING_PERIOD.
@@ -670,6 +722,14 @@ public final class LensConfConstants {
    */
   public static final String AUX_JARS = SESSION_PFX + "aux.jars";
 
+  /**
+   * Interval at which lens session expiry service runs
+   */
+  public static final String SESSION_EXPIRY_SERVICE_INTERVAL_IN_SECS = SERVER_PFX
+    + "session.expiry.serivce.interval.secs";
+
+  public static final int DEFAULT_SESSION_EXPIRY_SERVICE_INTERVAL_IN_SECS = 3600;
+
   // Statistics Store configuration keys
   /**
    * The Constant STATS_STORE_CLASS.
@@ -754,6 +814,13 @@ public final class LensConfConstants {
    */
   public static final String SERVER_DB_JDBC_PASS = SERVER_PFX + "db.jdbc.pass";
 
+  /** Validation query to check db pool is valid before passing to the application */
+  public static final String SERVER_DB_VALIDATION_QUERY = SERVER_PFX + "db.validation.query";
+
+  /** default value of the validation query */
+  public static final String DEFAULT_SERVER_DB_VALIDATION_QUERY = "select 1 from INFORMATION_SCHEMA.SYSTEM_USERS";
+
+
   /**
    * The Constant DEFAULT_SERVER_DB_PASS.
    */
@@ -773,4 +840,85 @@ public final class LensConfConstants {
    * Default Output Stream Buffer Size used in writing lens server state to file system: 1MB
    */
   public static final int DEFAULT_STATE_PERSIST_OUT_STREAM_BUFF_SIZE = 1048576;
+
+  /**
+   * Key for top level dir of database specific resources
+   */
+  public static final String DATABASE_RESOURCE_DIR = SERVER_PFX + "database.resource.dir";
+  /**
+   * Default value of top level dir for database specific resources
+   */
+  public static final String DEFAULT_DATABASE_RESOURCE_DIR = "/tmp/lens/resources";
+
+  /**
+   * Key for enabling metrics for each query to be different
+   */
+  public static final String ENABLE_QUERY_METRICS = QUERY_PFX + "enable.metrics.per.query";
+
+  /**
+   * Default value for query wise metrics
+   */
+  public static final boolean DEFAULT_ENABLE_QUERY_METRICS = false;
+
+  /**
+   * Key used to hold value of unique id for query metrics. This wont be passed by user, will be generated and set.
+   * This is to pass unique id for query across the code flow.
+   */
+  public static final String QUERY_METRIC_UNIQUE_ID_CONF_KEY = QUERY_PFX + "metric.unique.id";
+
+  /**
+   * Key used to hold value query metric name in the stack. This wont be passed by user, will be generated and set.
+   * When each query looked at by driver, the metric needs to be different for each driver. This name capture the stack
+   * from which driver the code reached there.
+   */
+  public static final String QUERY_METRIC_DRIVER_STACK_NAME = QUERY_PFX + "metric.driver.stack.name";
+
+  /**
+   * Timeout for parallel query estimate calls. A driver needs to comeback with a query estimate within this timeout.
+   */
+  public static final String ESTIMATE_TIMEOUT_MILLIS = SERVER_PFX + "estimate.timeout.millis";
+
+  /**
+   * Default value for timeout for parallel estimate calls.
+   */
+  public static final long DEFAULT_ESTIMATE_TIMEOUT_MILLIS = 300000L; // 5 minutes
+
+
+  /**
+   * Key used to get minimum number of threads in the estimate thread pool
+   */
+  public static final String ESTIMATE_POOL_MIN_THREADS = SERVER_PFX + "estimate.pool.min.threads";
+  public static final int DEFAULT_ESTIMATE_POOL_MIN_THREADS = 3;
+
+  /**
+   * Key used to get maximum number of threads in the estimate thread pool
+   */
+  public static final String ESTIMATE_POOL_MAX_THREADS = SERVER_PFX + "estimate.pool.max.threads";
+  public static final int DEFAULT_ESTIMATE_POOL_MAX_THREADS = 100;
+
+  /**
+   * Key used to get keep alive time for threads in the estimate thread pool
+   */
+  public static final String ESTIMATE_POOL_KEEP_ALIVE_MILLIS = SERVER_PFX + "estimate.pool.keepalive.millis";
+  public static final int DEFAULT_ESTIMATE_POOL_KEEP_ALIVE_MILLIS = 60000; // 1 minute
+
+  public static final String QUERY_PHASE1_REWRITERS = SERVER_PFX + "query.phase1.rewriters";
+
+  /**
+   * Key to get the implementations of query constraint factories.
+   */
+  public static final String QUERY_LAUNCHING_CONSTRAINT_FACTORIES_KEY = SERVER_PFX
+    + "query.launching.constraint.factories";
+
+  /**
+   * Key to get the total query cost ceiling per user.
+   */
+  public static final String TOTAL_QUERY_COST_CEILING_PER_USER_KEY = SERVER_PFX
+      + "total.query.cost.ceiling.per.user";
+
+  /**
+   * Key to get the implementations of waiting queries selection policy factories.
+   */
+  public static final String WAITING_QUERIES_SELECTION_POLICY_FACTORIES_KEY = SERVER_PFX
+      + "waiting.queries.selection.policy.factories";
 }

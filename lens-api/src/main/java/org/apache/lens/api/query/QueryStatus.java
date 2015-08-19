@@ -26,6 +26,8 @@ import java.io.Serializable;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 
+import org.apache.lens.api.result.LensErrorTO;
+
 import lombok.*;
 
 /**
@@ -153,6 +155,9 @@ public class QueryStatus implements Serializable {
   @Setter
   private String errorMessage;
 
+  @XmlElement
+  private LensErrorTO lensErrorTO;
+
   /*
    * (non-Javadoc)
    *
@@ -177,8 +182,20 @@ public class QueryStatus implements Serializable {
     return str.toString();
   }
 
-  public boolean isFinished() {
+  public boolean finished() {
     return status.equals(Status.SUCCESSFUL) || status.equals(Status.FAILED) || status.equals(Status.CANCELED);
+  }
+
+  public boolean launched() {
+    return status.equals(Status.LAUNCHED);
+  }
+
+  public boolean running() {
+    return status.equals(Status.RUNNING);
+  }
+
+  public boolean queued() {
+    return status.equals(Status.QUEUED);
   }
 
   /**
@@ -249,8 +266,15 @@ public class QueryStatus implements Serializable {
    * @param newState the new state
    * @return true, if is validate transition
    */
-  public boolean isValidateTransition(Status newState) {
+  public boolean isValidTransition(final Status newState) {
     return isValidTransition(this.status, newState);
   }
 
+  public Integer getErrorCode() {
+    return (this.lensErrorTO != null) ? this.lensErrorTO.getCode() : null;
+  }
+
+  public String getLensErrorTOErrorMsg() {
+    return (this.lensErrorTO != null) ? this.lensErrorTO.getMessage() : null;
+  }
 }

@@ -21,6 +21,7 @@ package org.apache.lens.cube.metadata;
 import java.util.List;
 
 import org.apache.hadoop.hive.ql.metadata.HiveException;
+import org.apache.hadoop.hive.ql.metadata.Partition;
 import org.apache.hadoop.hive.ql.metadata.Table;
 
 public class HDFSStorage extends Storage {
@@ -34,20 +35,35 @@ public class HDFSStorage extends Storage {
   }
 
   @Override
-  public void preAddPartition(StoragePartitionDesc addPartitionDesc) throws HiveException {
+  public void preAddPartitions(List<StoragePartitionDesc> addPartitionDesc) throws HiveException {
     // No op
 
   }
 
   @Override
-  public void commitAddPartition(StoragePartitionDesc addPartitionDesc) throws HiveException {
+  public void commitAddPartitions(List<StoragePartitionDesc> addPartitionDesc) throws HiveException {
     // No op
 
   }
 
   @Override
-  public void rollbackAddPartition(StoragePartitionDesc addPartitionDesc) throws HiveException {
+  public void rollbackAddPartitions(List<StoragePartitionDesc> addPartitionDesc) throws HiveException {
     // No op
+
+  }
+
+  @Override
+  public void preUpdatePartition(List<Partition> partitions) throws HiveException {
+
+  }
+
+  @Override
+  public void commitUpdatePartition(List<Partition> partitions) throws HiveException {
+
+  }
+
+  @Override
+  public void rollbackUpdatePartition(List<Partition> partitions) throws HiveException {
 
   }
 

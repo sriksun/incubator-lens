@@ -18,7 +18,8 @@
  */
 package org.apache.lens.cube.parse;
 
-import org.apache.hadoop.hive.ql.parse.SemanticException;
+import org.apache.lens.server.api.error.LensException;
+
 
 /**
  * HQL context holding the ql expressions
@@ -27,58 +28,58 @@ public interface HQLContextInterface {
 
   /**
    * Get the HQL query.
-   * 
+   *
    * @return query string
-   * @throws SemanticException
+   * @throws LensException
    */
-  public String toHQL() throws SemanticException;
+  String toHQL() throws LensException;
 
   /**
    * Get select expression.
-   * 
+   *
    * @return select
    */
-  public String getSelect();
+  String getSelect();
 
   /**
    * Get from string
-   * 
+   *
    * @return from
    */
-  public String getFrom();
+  String getFrom();
 
   /**
    * Get where string
-   * 
+   *
    * @return where
    */
-  public String getWhere();
+  String getWhere();
 
   /**
    * Get groupby string
-   * 
+   *
    * @return groupby
    */
-  public String getGroupby();
+  String getGroupby();
 
   /**
    * Get having string
-   * 
+   *
    * @return having
    */
-  public String getHaving();
+  String getHaving();
 
   /**
    * Get orderby string
-   * 
+   *
    * @return orderby
    */
-  public String getOrderby();
+  String getOrderby();
 
   /**
    * Get limit
-   * 
+   *
    * @return limit
    */
-  public Integer getLimit();
+  Integer getLimit();
 }

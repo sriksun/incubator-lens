@@ -26,17 +26,17 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.lens.api.LensException;
 import org.apache.lens.api.query.QueryHandle;
 import org.apache.lens.server.api.LensConfConstants;
+import org.apache.lens.server.api.driver.DriverQueryHook;
 import org.apache.lens.server.api.driver.DriverQueryPlan;
 import org.apache.lens.server.api.driver.DriverQueryStatus.DriverQueryState;
 import org.apache.lens.server.api.driver.LensDriver;
+import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.query.QueryContext;
+import org.apache.lens.server.api.user.MockDriverQueryHook;
 
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hive.service.Service;
@@ -47,13 +47,14 @@ import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
+import com.google.common.collect.Lists;
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * The Class TestRemoteHiveDriver.
  */
+@Slf4j
 public class TestRemoteHiveDriver extends TestHiveDriver {
-
-  /** The Constant LOG. */
-  public static final Log LOG = LogFactory.getLog(TestRemoteHiveDriver.class);
 
   /** The Constant HS2_HOST. */
   static final String HS2_HOST = "localhost";
@@ -121,7 +122,7 @@ public class TestRemoteHiveDriver extends TestHiveDriver {
     try {
       server.stop();
     } catch (Exception e) {
-      e.printStackTrace();
+      log.error("Error stopping hive service", e);
     }
   }
 
@@ -134,13 +135,10 @@ public class TestRemoteHiveDriver extends TestHiveDriver {
     conf = new HiveConf(remoteConf);
     conf.addResource("hivedriver-site.xml");
     driver = new HiveDriver();
-    conf.setBoolean(HiveDriver.HS2_CALCULATE_PRIORITY, false);
+    conf.setBoolean(HiveDriver.HS2_CALCULATE_PRIORITY, true);
+    conf.setClass(HiveDriver.HIVE_QUERY_HOOK_CLASS, MockDriverQueryHook.class, DriverQueryHook.class);
     driver.configure(conf);
-    drivers = new ArrayList<LensDriver>() {
-      {
-        add(driver);
-      }
-    };
+    drivers = Lists.<LensDriver>newArrayList(driver);
     System.out.println("TestRemoteHiveDriver created");
   }
 
@@ -151,14 +149,14 @@ public class TestRemoteHiveDriver extends TestHiveDriver {
    */
   @Test
   public void testMultiThreadClient() throws Exception {
-    LOG.info("@@ Starting multi thread test");
+    log.info("@@ Starting multi thread test");
     // Launch two threads
     createTestTable("test_multithreads");
     HiveConf thConf = new HiveConf(conf, TestRemoteHiveDriver.class);
     thConf.setLong(HiveDriver.HS2_CONNECTION_EXPIRY_DELAY, 10000);
     final HiveDriver thrDriver = new HiveDriver();
     thrDriver.configure(thConf);
-    QueryContext ctx = createContext("USE " + dataBase, conf);
+    QueryContext ctx = createContext("USE " + dataBase, conf, thrDriver);
     thrDriver.execute(ctx);
 
     // Launch a select query
@@ -171,14 +169,14 @@ public class TestRemoteHiveDriver extends TestHiveDriver {
     for (int q = 0; q < QUERIES; q++) {
       final QueryContext qctx;
       try {
-        qctx = createContext("SELECT * FROM test_multithreads", conf);
+        qctx = createContext("SELECT * FROM test_multithreads", conf, thrDriver);
         thrDriver.executeAsync(qctx);
       } catch (LensException e) {
         errCount.incrementAndGet();
-        LOG.info(q + " executeAsync error: " + e.getCause());
+        log.info(q + " executeAsync error: " + e.getCause());
         continue;
       }
-      LOG.info("@@ Launched query: " + q + " " + qctx.getQueryHandle());
+      log.info("@@ Launched query: " + q + " " + qctx.getQueryHandle());
       launchedQueries++;
       // Launch many threads to poll for status
       final QueryHandle handle = qctx.getQueryHandle();
@@ -192,18 +190,17 @@ public class TestRemoteHiveDriver extends TestHiveDriver {
               try {
                 thrDriver.updateStatus(qctx);
                 if (qctx.getDriverStatus().isFinished()) {
-                  LOG.info("@@ " + handle.getHandleId() + " >> " + qctx.getDriverStatus().getState());
+                  log.info("@@ " + handle.getHandleId() + " >> " + qctx.getDriverStatus().getState());
                   thrDriver.closeQuery(handle);
                   break;
                 }
                 Thread.sleep(POLL_DELAY);
               } catch (LensException e) {
-                LOG.error("Got Exception", e.getCause());
-                e.printStackTrace();
+                log.error("Got Exception " + e.getCause(), e);
                 errCount.incrementAndGet();
                 break;
               } catch (InterruptedException e) {
-                e.printStackTrace();
+                log.error("Encountred Interrupted exception", e);
                 break;
               }
             }
@@ -219,11 +216,11 @@ public class TestRemoteHiveDriver extends TestHiveDriver {
       try {
         th.join(10000);
       } catch (InterruptedException e) {
-        LOG.warn("Not ended yet: " + th.getName());
+        log.warn("Not ended yet: " + th.getName());
       }
     }
     Assert.assertEquals(0, thrDriver.getHiveHandleSize());
-    LOG.info("@@ Completed all pollers. Total thrift errors: " + errCount.get());
+    log.info("@@ Completed all pollers. Total thrift errors: " + errCount.get());
     assertEquals(launchedQueries, QUERIES);
     assertEquals(thrs.size(), QUERIES * THREADS);
     assertEquals(errCount.get(), 0);
@@ -247,7 +244,7 @@ public class TestRemoteHiveDriver extends TestHiveDriver {
 
     driverConf.setBoolean(LensConfConstants.QUERY_ADD_INSERT_OVEWRITE, false);
     driverConf.setBoolean(LensConfConstants.QUERY_PERSISTENT_RESULT_INDRIVER, false);
-    QueryContext ctx = createContext("USE " + dataBase, driverConf);
+    QueryContext ctx = createContext("USE " + dataBase, driverConf, oldDriver);
     oldDriver.execute(ctx);
     Assert.assertEquals(0, oldDriver.getHiveHandleSize());
 
@@ -255,20 +252,20 @@ public class TestRemoteHiveDriver extends TestHiveDriver {
 
     // Create some ops with a driver
     String createTable = "CREATE TABLE IF NOT EXISTS " + tableName + "(ID STRING)";
-    ctx = createContext(createTable, driverConf);
+    ctx = createContext(createTable, driverConf, oldDriver);
     oldDriver.execute(ctx);
 
     // Load some data into the table
     String dataLoad = "LOAD DATA LOCAL INPATH '" + TEST_DATA_FILE + "' OVERWRITE INTO TABLE " + tableName;
-    ctx = createContext(dataLoad, driverConf);
+    ctx = createContext(dataLoad, driverConf, oldDriver);
     oldDriver.execute(ctx);
 
     driverConf.setBoolean(LensConfConstants.QUERY_ADD_INSERT_OVEWRITE, true);
     driverConf.setBoolean(LensConfConstants.QUERY_PERSISTENT_RESULT_INDRIVER, true);
     // Fire two queries
-    QueryContext ctx1 = createContext("SELECT * FROM " + tableName, driverConf);
+    QueryContext ctx1 = createContext("SELECT * FROM " + tableName, driverConf, oldDriver);
     oldDriver.executeAsync(ctx1);
-    QueryContext ctx2 = createContext("SELECT ID FROM " + tableName, driverConf);
+    QueryContext ctx2 = createContext("SELECT ID FROM " + tableName, driverConf, oldDriver);
     oldDriver.executeAsync(ctx2);
     Assert.assertEquals(2, oldDriver.getHiveHandleSize());
 

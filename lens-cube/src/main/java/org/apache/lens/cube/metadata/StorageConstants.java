@@ -19,45 +19,79 @@
 
 package org.apache.lens.cube.metadata;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-public class StorageConstants {
+import com.google.common.collect.Maps;
+
+public final class StorageConstants {
+  private StorageConstants() {
+
+  }
+
   public static final String DATE_PARTITION_KEY = "dt";
   public static final String STORGAE_SEPARATOR = "_";
   public static final String LATEST_PARTITION_VALUE = "latest";
 
   /**
    * Get the partition spec for latest partition
-   * 
-   * @param The
-   *          partition column for latest spec
-   * 
+   *
+   * @param partCol column for latest spec
    * @return latest partition spec as Map from String to String
    */
   public static String getLatestPartFilter(String partCol) {
-    return partCol + "='" + LATEST_PARTITION_VALUE + "'";
+    return getPartFilter(partCol, LATEST_PARTITION_VALUE);
+  }
+
+  public static String getPartFilter(final String partCol, final String value) {
+    return getPartFilter(new HashMap<String, String>() {
+      {
+        put(partCol, value);
+      }
+    });
+  }
+
+  public static String getPartFilter(Map<String, String> parts) {
+    String sep = "";
+    StringBuilder ret = new StringBuilder();
+    if (parts != null) {
+      for (Map.Entry<String, String> entry : parts.entrySet()) {
+        ret.append(sep).append(entry.getKey()).append("='").append(entry.getValue()).append("'");
+        sep = " and ";
+      }
+    }
+    return ret.toString();
+  }
+
+  public static String getPartFilter(String partCol, String value, Map<String, String> parts) {
+    Map<String, String> allParts = Maps.newHashMap();
+    if (parts != null) {
+      allParts.putAll(parts);
+    }
+    allParts.put(partCol, value);
+    return getPartFilter(allParts);
+  }
+
+  public static String getLatestPartFilter(String partCol, Map<String, String> parts) {
+    return getPartFilter(partCol, LATEST_PARTITION_VALUE, parts);
   }
 
   /**
    * Get the latest partition value as List
-   * 
+   *
    * @return List
    */
-  public static List<String> getPartitionsForLatest() {
-    List<String> parts = new ArrayList<String>();
-    parts.add(LATEST_PARTITION_VALUE);
-    return parts;
+  public static Set<String> getPartitionsForLatest() {
+    return Collections.singleton(LATEST_PARTITION_VALUE);
   }
 
   /**
    * Get the partition spec for latest partition
-   * 
-   * @param The
-   *          partition column for latest spec
-   * 
+   *
+   * @param partSpec The latest partition spec
+   * @param partCol  The partition column for latest spec
    * @return latest partition spec as Map from String to String
    */
   public static Map<String, String> getLatestPartSpec(Map<String, String> partSpec, String partCol) {

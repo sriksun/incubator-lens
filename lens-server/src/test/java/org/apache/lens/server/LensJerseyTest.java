@@ -18,9 +18,7 @@
  */
 package org.apache.lens.server;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNotNull;
-import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.*;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -28,26 +26,32 @@ import java.net.URI;
 
 import javax.ws.rs.core.UriBuilder;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.apache.lens.driver.hive.TestRemoteHiveDriver;
+import org.apache.lens.server.api.LensConfConstants;
+import org.apache.lens.server.api.metrics.LensMetricsUtil;
+import org.apache.lens.server.api.metrics.MetricsService;
+import org.apache.lens.server.model.LogSegregationContext;
+import org.apache.lens.server.model.MappedDiagnosticLogSegregationContext;
+
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hive.service.Service;
 import org.apache.hive.service.Service.STATE;
-import org.apache.lens.driver.hive.TestRemoteHiveDriver;
-import org.apache.lens.server.api.LensConfConstants;
-import org.apache.lens.server.api.metrics.MetricsService;
+
 import org.glassfish.jersey.test.JerseyTest;
 import org.testng.annotations.AfterSuite;
 import org.testng.annotations.BeforeSuite;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * Extend this class for unit testing Lens Jersey resources
  */
+@Slf4j
 public abstract class LensJerseyTest extends JerseyTest {
 
-  public static final Log LOG = LogFactory.getLog(LensJerseyTest.class);
-
   private int port = -1;
+
+  private final LogSegregationContext logSegregationContext = new MappedDiagnosticLogSegregationContext();
 
   protected URI getUri() {
     return UriBuilder.fromUri("http://localhost/").port(getTestPort()).build();
@@ -57,7 +61,15 @@ public abstract class LensJerseyTest extends JerseyTest {
     return port != -1;
   }
 
-  protected int getTestPort()  {
+  public void setUp() throws Exception {
+    log.info("setUp in class: {}", this.getClass().getCanonicalName());
+    super.setUp();
+  }
+  public void tearDown() throws Exception {
+    log.info("tearDown in class: {}", this.getClass().getCanonicalName());
+    super.tearDown();
+  }
+  protected int getTestPort() {
     if (!isPortAlreadyFound()) {
       return port;
     }
@@ -66,14 +78,14 @@ public abstract class LensJerseyTest extends JerseyTest {
       socket = new ServerSocket(0);
       setPort(socket.getLocalPort());
     } catch (IOException e) {
-      LOG.info("Exception occured while creating socket. Use a default port number " +  port);
+      log.info("Exception occured while creating socket. Use a default port number {}", port);
     } finally {
       try {
         if (socket != null) {
           socket.close();
         }
       } catch (IOException e) {
-        LOG.info("Exception occured while closing the socket ", e);
+        log.info("Exception occured while closing the socket", e);
       }
     }
     return port;
@@ -88,21 +100,30 @@ public abstract class LensJerseyTest extends JerseyTest {
     return UriBuilder.fromUri(getUri()).path("lens-server").build();
   }
 
+  public HiveConf getServerConf() {
+    return LensServerConf.getHiveConf();
+  }
+
   /**
    * Start all.
    *
-   * @throws Exception
-   *           the exception
+   * @throws Exception the exception
    */
   @BeforeSuite
   public void startAll() throws Exception {
+    log.info("Before suite");
+    System.setProperty("lens.log.dir", "target/");
     TestRemoteHiveDriver.createHS2Service();
     System.out.println("Remote hive server started!");
     HiveConf hiveConf = new HiveConf();
     hiveConf.setIntVar(HiveConf.ConfVars.HIVE_SERVER2_ASYNC_EXEC_THREADS, 5);
     hiveConf.setIntVar(HiveConf.ConfVars.HIVE_SERVER2_THRIFT_CLIENT_CONNECTION_RETRY_LIMIT, 3);
     hiveConf.setIntVar(HiveConf.ConfVars.HIVE_SERVER2_THRIFT_CLIENT_RETRY_LIMIT, 3);
-    LensServices.get().init(LensServerConf.get());
+
+    LensTestUtil.createTestDatabaseResources(new String[]{LensTestUtil.DB_WITH_JARS, LensTestUtil.DB_WITH_JARS_2},
+      hiveConf);
+
+    LensServices.get().init(LensServerConf.getHiveConf());
     LensServices.get().start();
 
     // Check if mock service is started
@@ -116,11 +137,11 @@ public abstract class LensJerseyTest extends JerseyTest {
   /**
    * Stop all.
    *
-   * @throws Exception
-   *           the exception
+   * @throws Exception the exception
    */
   @AfterSuite
   public void stopAll() throws Exception {
+    log.info("After suite");
     verifyMetrics();
     LensServices.get().stop();
     System.out.println("Lens services stopped!");
@@ -134,7 +155,7 @@ public abstract class LensJerseyTest extends JerseyTest {
   protected void verifyMetrics() {
     // print final metrics
     System.out.println("Final report");
-    MetricsService metrics = ((MetricsService) LensServices.get().getService(MetricsService.NAME));
+    MetricsService metrics = LensServices.get().getService(MetricsService.NAME);
     metrics.publishReport();
 
     // validate http error count
@@ -143,7 +164,7 @@ public abstract class LensJerseyTest extends JerseyTest {
     long httpOtherErrors = metrics.getCounter(LensRequestListener.class, LensRequestListener.HTTP_UNKOWN_ERROR);
     long httpErrors = metrics.getCounter(LensRequestListener.class, LensRequestListener.HTTP_ERROR);
     assertEquals(httpClientErrors + httpServerErrors + httpOtherErrors, httpErrors,
-        "Server + Client error should equal total errors");
+      "Server + Client error should equal total errors");
 
     // validate http metrics
     long httpReqStarted = metrics.getCounter(LensRequestListener.class, LensRequestListener.HTTP_REQUESTS_STARTED);
@@ -157,15 +178,14 @@ public abstract class LensJerseyTest extends JerseyTest {
     long queriesFinished = metrics.getTotalFinishedQueries();
 
     assertEquals(queriesFinished, queriesSuccessful + queriesFailed + queriesCancelled,
-        "Total finished queries should be sum of successful, failed and cancelled queries");
-
+      "Total finished queries should be sum of successful, failed and cancelled queries");
   }
 
   /**
    * Restart lens server.
    */
   public void restartLensServer() {
-    HiveConf h = LensServerConf.get();
+    HiveConf h = getServerConf();
     h.set(LensConfConstants.MAX_NUMBER_OF_FINISHED_QUERY, "0");
     restartLensServer(h);
   }
@@ -173,13 +193,13 @@ public abstract class LensJerseyTest extends JerseyTest {
   /**
    * Restart lens server.
    *
-   * @param conf
-   *          the conf
+   * @param conf the conf
    */
   public void restartLensServer(HiveConf conf) {
     LensServices.get().stop();
+    LensMetricsUtil.clearRegistry();
     System.out.println("Lens services stopped!");
-    LensServices.setInstance(new LensServices(LensServices.LENS_SERVICES_NAME));
+    LensServices.setInstance(new LensServices(LensServices.LENS_SERVICES_NAME, this.logSegregationContext));
     LensServices.get().init(conf);
     LensServices.get().start();
     System.out.println("Lens services restarted!");

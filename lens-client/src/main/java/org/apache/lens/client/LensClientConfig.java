@@ -49,7 +49,7 @@ public class LensClientConfig extends Configuration {
   private static final String QUERY_POLL_INTERVAL_KEY = CLIENT_PFX + "query.poll.interval";
 
   /** The Constant DEFAULT_QUERY_POLL_INTERVAL. */
-  private static final long DEFAULT_QUERY_POLL_INTERVAL = 10 * 1000L;
+  private static final long DEFAULT_QUERY_POLL_INTERVAL = 10L;
 
   /** The Constant USER_NAME. */
   private static final String USER_NAME = CLIENT_PFX + "user.name";
@@ -66,6 +66,8 @@ public class LensClientConfig extends Configuration {
   /** The Constant DEFAULT_SESSION_RESOURCE_PATH. */
   public static final String DEFAULT_SESSION_RESOURCE_PATH = "session";
 
+  public static final String DEFAULT_LOG_RESOURCE_PATH = "logs";
+
   // server side conf properties copied here
   /** The Constant SERVER_BASE_URL. */
   public static final String SERVER_BASE_URL = "lens.server.base.url";
@@ -75,6 +77,10 @@ public class LensClientConfig extends Configuration {
 
   /** The Constant SESSION_CLUSTER_USER. */
   public static final String SESSION_CLUSTER_USER = "lens.session.cluster.user";
+
+  public static final String SESSION_FILTER_NAMES = CLIENT_PFX + "ws.request.filternames";
+
+  public static final String WS_FILTER_IMPL_SFX = ".ws.filter.impl";
 
   /**
    * Get the username from config
@@ -144,5 +150,13 @@ public class LensClientConfig extends Configuration {
 
   public void setBaseUrl(String baseUrl) {
     this.set(SERVER_BASE_URL, baseUrl);
+  }
+
+  public String getLogResourcePath() {
+    return DEFAULT_LOG_RESOURCE_PATH;
+  }
+
+  public static String getWSFilterImplConfKey(String filterName) {
+    return CLIENT_PFX + filterName + WS_FILTER_IMPL_SFX;
   }
 }

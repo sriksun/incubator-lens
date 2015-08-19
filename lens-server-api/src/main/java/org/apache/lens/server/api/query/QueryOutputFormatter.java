@@ -24,7 +24,7 @@ import org.apache.lens.server.api.driver.LensResultSetMetadata;
 
 /**
  * The interface for query result formatting
- * <p/>
+ * <p></p>
  * This is an abstract interface, user should implement {@link InMemoryOutputFormatter} or
  * {@link PersistedOutputFormatter} for formatting the result.
  */
@@ -55,7 +55,7 @@ public interface QueryOutputFormatter {
 
   /**
    * Commit the formatting.
-   * <p/>
+   * <p></p>
    * This will make the result consumable by user, will be called after all the writes succeed.
    *
    * @throws IOException Signals that an I/O exception has occurred.
@@ -79,9 +79,15 @@ public interface QueryOutputFormatter {
   /**
    * Get total number of rows in result.
    *
-   * @return Total number of rows, return -1, if not known
+   * @return Total number of rows, return null, if not known
    */
-  int getNumRows();
+  Integer getNumRows();
+
+  /**
+   * Get size of the resultset file.
+   * @return Total number of rows, return null, if not known
+   */
+  Long getFileSize();
 
   /**
    * Get resultset metadata

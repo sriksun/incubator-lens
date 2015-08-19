@@ -26,7 +26,7 @@
   <parent>
     <artifactId>apache-lens</artifactId>
     <groupId>org.apache.lens</groupId>
-    <version>2.0.1-incubating-SNAPSHOT</version>
+    <version>2.4.0-beta-incubating-SNAPSHOT</version>
   </parent>
 
   <properties>
@@ -61,10 +61,19 @@
       <artifactId>lens-cube</artifactId>
       <version>${project.version}</version>
     </dependency>
-
+    <dependency>
+      <groupId>org.apache.lens</groupId>
+      <artifactId>lens-api</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.lens</groupId>
       <artifactId>lens-driver-hive</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lens</groupId>
+      <artifactId>lens-driver-es</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -93,6 +102,10 @@
     <dependency>
       <groupId>org.glassfish.jersey.test-framework.providers</groupId>
       <artifactId>jersey-test-framework-provider-grizzly2</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.glassfish.jersey.test-framework.providers</groupId>
+      <artifactId>jersey-test-framework-provider-inmemory</artifactId>
     </dependency>
     <dependency>
       <groupId>org.glassfish.jersey.test-framework</groupId>
@@ -149,12 +162,26 @@
     </dependency>
 
     <dependency>
+      <groupId>org.powermock</groupId>
+      <artifactId>powermock-module-testng</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.powermock</groupId>
+      <artifactId>powermock-api-mockito</artifactId>
+    </dependency>
+
+    <dependency>
       <groupId>com.codahale.metrics</groupId>
       <artifactId>metrics-core</artifactId>
     </dependency>
     <dependency>
       <groupId>com.codahale.metrics</groupId>
       <artifactId>metrics-ganglia</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.codahale.metrics</groupId>
+      <artifactId>metrics-graphite</artifactId>
     </dependency>
     <dependency>
       <groupId>com.codahale.metrics</groupId>
@@ -170,7 +197,7 @@
     </dependency>
     <dependency>
       <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-log4j12</artifactId>
+      <artifactId>slf4j-api</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.hadoop</groupId>
@@ -183,6 +210,10 @@
     <dependency>
       <groupId>org.subethamail</groupId>
       <artifactId>subethasmtp</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>commons-collections</groupId>
+      <artifactId>commons-collections</artifactId>
     </dependency>
     <dependency>
       <groupId>commons-dbcp</groupId>
@@ -209,6 +240,10 @@
       <artifactId>joda-time</artifactId>
     </dependency>
     <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.apache.lens</groupId>
       <artifactId>lens-server-api</artifactId>
       <type>test-jar</type>
@@ -218,6 +253,16 @@
   </dependencies>
 
   <build>
+    <testResources>
+      <testResource>
+        <directory>${project.basedir}/testdata</directory>
+        <filtering>true</filtering>
+      </testResource>
+      <testResource>
+        <directory>${project.basedir}/src/test/resources</directory>
+        <filtering>true</filtering>
+      </testResource>
+    </testResources>
     <plugins>
       <plugin>
         <artifactId>maven-war-plugin</artifactId>
@@ -243,6 +288,38 @@
             </goals>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>prepare-test-additional-jars</id>
+            <phase>test-compile</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <target>
+                <property name="build.compiler" value="extJavac"/>
+                <property name="compile_classpath" refid="maven.compile.classpath"/>
+                <mkdir dir="${project.build.directory}/additional-classes"/>
+                <javac includeantruntime="false" srcdir="src/additional/java"
+                  destdir="${project.build.directory}/additional-classes" classpath="${compile_classpath}"/>
+                <mkdir dir="${project.build.directory}/testjars"/>
+                <jar destfile="${project.build.directory}/testjars/test.jar">
+                  <fileset dir="${project.build.directory}/additional-classes" includes="ClassLoaderTestClass.class"/>
+                </jar>
+                <jar destfile="${project.build.directory}/testjars/test2.jar">
+                  <fileset dir="${project.build.directory}/additional-classes" includes="ClassLoaderTestClass2.class"/>
+                </jar>
+                <jar destfile="${project.build.directory}/testjars/serde.jar">
+                  <fileset dir="${project.build.directory}/additional-classes" includes="DatabaseJarSerde.class"/>
+                </jar>
+               </target>
+             </configuration>
+          </execution>
+         </executions>
       </plugin>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
@@ -301,22 +378,33 @@
           </execution>
         </executions>
       </plugin>
-
-      <plugin>
-        <groupId>org.codehaus.enunciate</groupId>
-        <artifactId>maven-enunciate-plugin</artifactId>
-        <executions>
-          <execution>
-            <goals>
-              <goal>docs</goal>
-            </goals>
-          </execution>
-        </executions>
-        <configuration>
-          <configFile>enunciate.xml</configFile>
-        </configuration>
-      </plugin>
     </plugins>
   </build>
 
+  <profiles>
+    <profile>
+      <id>enunciate</id>
+      <activation>
+        <jdk>[1.7,1.8)</jdk>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.enunciate</groupId>
+            <artifactId>maven-enunciate-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>docs</goal>
+                </goals>
+              </execution>
+            </executions>
+            <configuration>
+              <configFile>enunciate.xml</configFile>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

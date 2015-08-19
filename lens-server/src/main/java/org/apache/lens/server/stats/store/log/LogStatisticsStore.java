@@ -18,17 +18,22 @@
  */
 package org.apache.lens.server.stats.store.log;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.lens.server.LensServices;
 import org.apache.lens.server.api.events.LensEventService;
 import org.apache.lens.server.api.metrics.MetricsService;
+import org.apache.lens.server.model.LogSegregationContext;
+import org.apache.lens.server.model.MappedDiagnosticLogSegregationContext;
 import org.apache.lens.server.stats.event.LoggableLensStatistics;
 import org.apache.lens.server.stats.store.StatisticsStore;
+
+import org.apache.hadoop.hive.conf.HiveConf;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * The Class LogStatisticsStore.
@@ -50,31 +55,34 @@ public class LogStatisticsStore extends StatisticsStore<LoggableLensStatistics> 
   /** The rollup handler. */
   private StatisticsLogRollupHandler rollupHandler;
 
+  private final LogSegregationContext logSegregationContext;
+
   /**
    * Instantiates a new log statistics store.
    */
   public LogStatisticsStore() {
     this.mapper = new ObjectMapper();
+    this.logSegregationContext = new MappedDiagnosticLogSegregationContext();
     mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
   }
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see org.apache.lens.server.stats.store.StatisticsStore#initialize(org.apache.hadoop.conf.Configuration)
    */
-  public void initialize(Configuration conf) {
+  public void initialize(HiveConf conf) {
     LOG.info("Creating new Partition handler");
     handler = new StatisticsLogPartitionHandler();
     handler.initialize(conf);
     LOG.info("Creating new rollup handler");
-    rollupHandler = new StatisticsLogRollupHandler();
+    rollupHandler = new StatisticsLogRollupHandler(this.logSegregationContext);
     rollupHandler.initialize(conf);
   }
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see org.apache.lens.server.api.events.AsyncEventListener#process(org.apache.lens.server.api.events.LensEvent)
    */
   @Override
@@ -84,14 +92,15 @@ public class LogStatisticsStore extends StatisticsStore<LoggableLensStatistics> 
       String representation = null;
       try {
         representation = mapper.writeValueAsString(event);
-      } catch (JsonProcessingException ignored) {
+      } catch (JsonProcessingException e) {
+        LOG.error("json processing exception", e);
       }
       if (representation != null) {
         rollupHandler.addToScanTask(eventClass.getName());
         LoggerFactory.getLogger(eventClass).info(representation);
       }
     } catch (Exception exc) {
-      MetricsService metricsService = (MetricsService) LensServices.get().getService(MetricsService.NAME);
+      MetricsService metricsService = LensServices.get().getService(MetricsService.NAME);
       metricsService.incrCounter(LogStatisticsStore.class, LOG_STORE_ERRORS);
       LOG.error("Unknown error ", exc);
     }
@@ -100,7 +109,7 @@ public class LogStatisticsStore extends StatisticsStore<LoggableLensStatistics> 
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see org.apache.lens.server.stats.store.StatisticsStore#start(org.apache.lens.server.api.events.LensEventService)
    */
   public void start(LensEventService service) {
@@ -117,7 +126,7 @@ public class LogStatisticsStore extends StatisticsStore<LoggableLensStatistics> 
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see org.apache.lens.server.stats.store.StatisticsStore#stop(org.apache.lens.server.api.events.LensEventService)
    */
   public void stop(LensEventService service) {

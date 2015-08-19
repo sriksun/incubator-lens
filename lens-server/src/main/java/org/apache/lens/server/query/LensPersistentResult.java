@@ -18,9 +18,9 @@
  */
 package org.apache.lens.server.query;
 
-import org.apache.lens.api.LensException;
 import org.apache.lens.server.api.driver.LensResultSetMetadata;
 import org.apache.lens.server.api.driver.PersistentResultSet;
+import org.apache.lens.server.api.error.LensException;
 
 /**
  * The Class LensPersistentResult.
@@ -34,22 +34,23 @@ public class LensPersistentResult extends PersistentResultSet {
   private final String outputPath;
 
   /** The num rows. */
-  private final int numRows;
+  private final Integer numRows;
+
+  /** The file size. */
+  private final Long fileSize;
 
   /**
    * Instantiates a new lens persistent result.
    *
-   * @param metadata
-   *          the metadata
-   * @param outputPath
-   *          the output path
-   * @param numRows
-   *          the num rows
+   * @param metadata   the metadata
+   * @param outputPath the output path
+   * @param numRows    the num rows
    */
-  public LensPersistentResult(LensResultSetMetadata metadata, String outputPath, int numRows) {
+  public LensPersistentResult(LensResultSetMetadata metadata, String outputPath, Integer numRows, Long fileSize) {
     this.metadata = metadata;
     this.outputPath = outputPath;
     this.numRows = numRows;
+    this.fileSize = fileSize;
   }
 
   @Override
@@ -59,12 +60,17 @@ public class LensPersistentResult extends PersistentResultSet {
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see org.apache.lens.server.api.driver.LensResultSet#size()
    */
   @Override
-  public int size() throws LensException {
+  public Integer size() throws LensException {
     return numRows;
+  }
+
+  @Override
+  public Long fileSize() throws LensException {
+    return fileSize;
   }
 
   @Override

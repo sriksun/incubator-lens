@@ -19,12 +19,15 @@
 package org.apache.lens.client;
 
 import java.net.URI;
-import java.util.List;
 
 import javax.ws.rs.core.UriBuilder;
 
 import org.apache.lens.server.LensAllApplicationJerseyTest;
 import org.apache.lens.server.api.LensConfConstants;
+
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.api.Database;
+import org.apache.hadoop.hive.ql.metadata.Hive;
 
 import org.testng.Assert;
 import org.testng.annotations.AfterTest;
@@ -33,10 +36,11 @@ import org.testng.annotations.Test;
 
 @Test(groups = "unit-test")
 public class TestLensClient extends LensAllApplicationJerseyTest {
+  private static final String TEST_DB = TestLensClient.class.getSimpleName();
 
   @Override
   protected int getTestPort() {
-    return 10000;
+    return 10056;
   }
 
   @Override
@@ -47,25 +51,35 @@ public class TestLensClient extends LensAllApplicationJerseyTest {
   @BeforeTest
   public void setUp() throws Exception {
     super.setUp();
+
+    Hive hive = Hive.get(new HiveConf());
+    Database db = new Database();
+    db.setName(TEST_DB);
+    hive.createDatabase(db, true);
   }
 
   @AfterTest
   public void tearDown() throws Exception {
     super.tearDown();
+
+    Hive hive = Hive.get(new HiveConf());
+    hive.dropDatabase(TEST_DB);
   }
 
   @Test
   public void testClient() throws Exception {
     LensClientConfig lensClientConfig = new LensClientConfig();
+    lensClientConfig.setLensDatabase(TEST_DB);
+    Assert.assertEquals(lensClientConfig.getLensDatabase(), TEST_DB);
+
     lensClientConfig.set(LensConfConstants.SERVER_BASE_URL, "http://localhost:" + getTestPort() + "/lensapi");
     LensClient client = new LensClient(lensClientConfig);
-    Assert.assertEquals(client.getCurrentDatabae(), "default",
+    Assert.assertEquals(client.getCurrentDatabae(), TEST_DB,
       "current database");
-    List<String> dbs = client.getAllDatabases();
-    Assert.assertEquals(dbs.size(), 1, "no of databases");
     client.createDatabase("testclientdb", true);
-    Assert.assertEquals(client.getAllDatabases().size(), 2, " no of databases");
-    client.dropDatabase("testclientdb");
-    Assert.assertEquals(client.getAllDatabases().size(), 1, " no of databases");
+    Assert.assertTrue(client.getAllDatabases().contains("testclientdb"));
+    client.dropDatabase("testclientdb", false);
+    Assert.assertFalse(client.getAllDatabases().contains("testclientdb"));
+    Assert.assertTrue(RequestTestFilter.isAccessed(), "RequestTestFilter not invoked");
   }
 }

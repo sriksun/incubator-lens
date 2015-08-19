@@ -21,44 +21,40 @@ package org.apache.lens.cube.parse;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
-import org.apache.hadoop.hive.ql.parse.SemanticException;
 import org.apache.lens.cube.metadata.Dimension;
+import org.apache.lens.server.api.error.LensException;
 
 /**
- * HQL context class which passes all query strings from
- * {@link CubeQueryContext} and works with all dimensions to be queried.
- * 
+ * HQL context class which passes all query strings from {@link CubeQueryContext} and works with all dimensions to be
+ * queried.
+ * <p/>
  * Updates from string with join clause expanded
- * 
  */
 class DimOnlyHQLContext extends DimHQLContext {
 
-  public static Log LOG = LogFactory.getLog(DimOnlyHQLContext.class.getName());
+  DimOnlyHQLContext(Map<Dimension, CandidateDim> dimsToQuery, CubeQueryContext query) throws LensException {
+    super(query, dimsToQuery, dimsToQuery.keySet(), query.getSelectTree(),
+      query.getWhereTree(), query.getGroupByTree(), query.getOrderByTree(),
+      query.getHavingTree(), query.getLimitValue());
+  }
 
-  DimOnlyHQLContext(Map<Dimension, CandidateDim> dimsToQuery, CubeQueryContext query) throws SemanticException {
-    super(query, dimsToQuery, dimsToQuery.keySet(), query.getSelectTree(), query.getWhereTree(), query.getGroupByTree(), query
+  DimOnlyHQLContext(Map<Dimension, CandidateDim> dimsToQuery, CubeQueryContext query, String whereClause)
+    throws LensException {
+    super(query, dimsToQuery, dimsToQuery.keySet(), query.getSelectTree(), whereClause, query.getGroupByTree(), query
         .getOrderByTree(), query.getHavingTree(), query.getLimitValue());
   }
 
-  public String toHQL() throws SemanticException {
+  public String toHQL() throws LensException {
     return query.getInsertClause() + super.toHQL();
   }
 
-  protected String getFromTable() throws SemanticException {
+  protected String getFromTable() throws LensException {
     if (query.getAutoJoinCtx() != null && query.getAutoJoinCtx().isJoinsResolved()) {
       return getDimsToQuery().get(query.getAutoJoinCtx().getAutoJoinTarget()).getStorageString(
-          query.getAliasForTabName(query.getAutoJoinCtx().getAutoJoinTarget().getName()));
+        query.getAliasForTableName(query.getAutoJoinCtx().getAutoJoinTarget().getName()));
     } else {
       return query.getQBFromString(null, getDimsToQuery());
     }
-  }
-
-  @Override
-  protected String getPostSelectionWhereClause() throws SemanticException {
-    return null;
   }
 
   @Override

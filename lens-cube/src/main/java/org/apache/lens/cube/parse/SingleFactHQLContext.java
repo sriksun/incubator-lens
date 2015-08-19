@@ -20,90 +20,83 @@ package org.apache.lens.cube.parse;
 
 import java.util.Map;
 
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.hive.ql.parse.ASTNode;
-import org.apache.hadoop.hive.ql.parse.ParseException;
-import org.apache.hadoop.hive.ql.parse.SemanticException;
 import org.apache.lens.cube.metadata.Dimension;
 
+import org.apache.lens.server.api.error.LensException;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.hadoop.hive.ql.parse.ASTNode;
+import org.apache.hadoop.hive.ql.parse.ParseException;
+
 /**
- * HQL context class which passes down all query strings to come from
- * DimOnlyHQLContext and works with fact being queried.
- * 
+ * HQL context class which passes down all query strings to come from DimOnlyHQLContext and works with fact being
+ * queried.
+ * <p/>
  * Updates from string with join clause expanded
- * 
  */
 class SingleFactHQLContext extends DimOnlyHQLContext {
 
-  public static Log LOG = LogFactory.getLog(SingleFactHQLContext.class.getName());
-
-  private CandidateFact fact;
+  private final CandidateFact fact;
+  private String storageAlias;
 
   SingleFactHQLContext(CandidateFact fact, Map<Dimension, CandidateDim> dimsToQuery, CubeQueryContext query)
-      throws SemanticException {
+    throws LensException {
     super(dimsToQuery, query);
     this.fact = fact;
   }
+
+  SingleFactHQLContext(CandidateFact fact, String storageAlias, Map<Dimension, CandidateDim> dimsToQuery,
+      CubeQueryContext query, String whereClause) throws LensException {
+    super(dimsToQuery, query, whereClause);
+    this.fact = fact;
+    this.storageAlias = storageAlias;
+  }
+
 
   public CandidateFact getFactToQuery() {
     return fact;
   }
 
-  static void addRangeClauses(CubeQueryContext query, CandidateFact fact) throws SemanticException {
+  static void addRangeClauses(CubeQueryContext query, CandidateFact fact) throws LensException {
     if (fact != null) {
       // resolve timerange positions and replace it by corresponding where
       // clause
       for (TimeRange range : query.getTimeRanges()) {
-        String rangeWhere = fact.rangeToWhereClause.get(range);
-        if (!StringUtils.isBlank(rangeWhere)) {
-          ASTNode rangeAST;
-          try {
-            rangeAST = HQLParser.parseExpr(rangeWhere);
-          } catch (ParseException e) {
-            throw new SemanticException(e);
+        for (Map.Entry<String, String> entry : fact.getRangeToStorageWhereMap().get(range).entrySet()) {
+          String table = entry.getValue();
+          String rangeWhere = entry.getKey();
+
+          if (!StringUtils.isBlank(rangeWhere)) {
+            ASTNode rangeAST;
+            try {
+              rangeAST = HQLParser.parseExpr(rangeWhere);
+            } catch (ParseException e) {
+              throw new LensException(e);
+            }
+            rangeAST.setParent(range.getParent());
+            range.getParent().setChild(range.getChildIndex(), rangeAST);
           }
-          rangeAST.setParent(range.getParent());
-          range.getParent().setChild(range.getChildIndex(), rangeAST);
+          fact.getStorgeWhereClauseMap().put(table, query.getWhereTree());
         }
       }
     }
   }
 
-  private final String unionQueryFormat = "SELECT * FROM %s";
-
-  String getUnionQueryFormat() {
-    StringBuilder queryFormat = new StringBuilder();
-    queryFormat.append(unionQueryFormat);
-    if (getQuery().getGroupByTree() != null) {
-      queryFormat.append(" GROUP BY %s");
-    }
-    if (getQuery().getHavingTree() != null) {
-      queryFormat.append(" HAVING %s");
-    }
-    if (getQuery().getOrderByTree() != null) {
-      queryFormat.append(" ORDER BY %s");
-    }
-    if (getQuery().getLimitValue() != null) {
-      queryFormat.append(" LIMIT %s");
-    }
-    return queryFormat.toString();
-  }
 
   @Override
-  protected String getPostSelectionWhereClause() throws SemanticException {
-    return StorageUtil.getNotLatestClauseForDimensions(
-      query.getAliasForTabName(query.getCube().getName()),
-      fact.getTimePartCols(),
-      query.getTimeRanges().iterator().next().getPartitionColumn());
-  }
-
-  protected String getFromTable() throws SemanticException {
+  protected String getFromTable() throws LensException {
     if (getQuery().getAutoJoinCtx() != null && getQuery().getAutoJoinCtx().isJoinsResolved()) {
-      return fact.getStorageString(getQuery().getAliasForTabName(getQuery().getCube().getName()));
+      if (storageAlias != null) {
+        return storageAlias;
+      } else {
+        return fact.getStorageString(getQuery().getAliasForTableName(getQuery().getCube().getName()));
+      }
     } else {
-      return getQuery().getQBFromString(fact, getDimsToQuery());
+      if (fact.getStorageTables().size() == 1) {
+        return getQuery().getQBFromString(fact, getDimsToQuery());
+      } else {
+        return storageAlias;
+      }
     }
   }
 }

@@ -23,10 +23,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.lens.api.LensConf;
-import org.apache.lens.api.LensException;
-import org.apache.lens.server.api.driver.*;
+import org.apache.lens.server.api.driver.LensDriver;
+import org.apache.lens.server.api.driver.MinQueryCostSelector;
+import org.apache.lens.server.api.driver.MockDriver;
+import org.apache.lens.server.api.driver.MockFailDriver;
+import org.apache.lens.server.api.error.LensException;
+import org.apache.lens.server.api.query.MockQueryContext;
+
+import org.apache.hadoop.conf.Configuration;
+
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -36,16 +42,18 @@ import org.testng.annotations.Test;
 public class TestMinCostSelector {
 
   private MockQueryContext createMockContext(String query, Configuration conf, LensConf lensConf,
-                                             Map<LensDriver, String> driverQueries) throws LensException {
-    MockQueryContext ctx = new MockQueryContext(query, lensConf, conf,  driverQueries.keySet());
-    ctx.setDriverQueriesAndPlans(driverQueries);
+    Map<LensDriver, String> driverQueries) throws LensException {
+    MockQueryContext ctx = new MockQueryContext(query, lensConf, conf, driverQueries.keySet());
+    ctx.setDriverQueries(driverQueries);
+    ctx.estimateCostForDrivers();
     return ctx;
   }
 
   private MockQueryContext createMockContext(String query, Configuration conf, LensConf lensConf,
-      List<LensDriver> drivers, Map<LensDriver, String> driverQueries) throws LensException {
-    MockQueryContext ctx = new MockQueryContext(query, lensConf, conf,  driverQueries.keySet());
-    ctx.setDriverQueriesAndPlans(driverQueries);
+    List<LensDriver> drivers, Map<LensDriver, String> driverQueries) throws LensException {
+    MockQueryContext ctx = new MockQueryContext(query, lensConf, conf, driverQueries.keySet());
+    ctx.setDriverQueries(driverQueries);
+    ctx.estimateCostForDrivers();
     return ctx;
   }
 

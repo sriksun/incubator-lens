@@ -29,6 +29,7 @@ import org.apache.lens.api.query.*;
 import org.apache.lens.client.LensClientSingletonWrapper;
 import org.apache.lens.client.LensMetadataClient;
 import org.apache.lens.client.LensStatement;
+import org.apache.lens.client.exceptions.LensAPIException;
 
 import org.apache.commons.lang.StringUtils;
 
@@ -52,15 +53,15 @@ public class SampleQueries {
    * @throws JAXBException the JAXB exception
    */
   public SampleQueries() throws JAXBException {
-    metaClient = new LensMetadataClient(LensClientSingletonWrapper.INSTANCE.getClient().getConnection());
-    queryClient = new LensStatement(LensClientSingletonWrapper.INSTANCE.getClient().getConnection());
+    metaClient = new LensMetadataClient(LensClientSingletonWrapper.instance().getClient().getConnection());
+    queryClient = new LensStatement(LensClientSingletonWrapper.instance().getClient().getConnection());
   }
 
   /**
    * Close.
    */
   public void close() {
-    LensClientSingletonWrapper.INSTANCE.getClient().closeConnection();
+    LensClientSingletonWrapper.instance().getClient().closeConnection();
   }
 
   /**
@@ -71,6 +72,7 @@ public class SampleQueries {
    */
   public static void main(String[] args) throws Exception {
     SampleQueries queries = null;
+    long start = System.currentTimeMillis();
     try {
       queries = new SampleQueries();
       if (args.length > 0) {
@@ -88,6 +90,8 @@ public class SampleQueries {
       if (queries != null) {
         queries.close();
       }
+      long end = System.currentTimeMillis();
+      System.out.println("Total time for running examples(in millis) :" + (end-start));
     }
   }
 
@@ -96,7 +100,7 @@ public class SampleQueries {
    *
    * @throws IOException Signals that an I/O exception has occurred.
    */
-  public void queryAll() throws IOException {
+  public void queryAll() throws IOException, LensAPIException {
     runQueries("dimension-queries.sql");
     runQueries("cube-queries.sql");
     System.out.println("Successful queries " + success + " out of " + total + "queries");
@@ -114,9 +118,9 @@ public class SampleQueries {
    * @param fileName the file name
    * @throws IOException Signals that an I/O exception has occurred.
    */
-  public void runQueries(String fileName) throws IOException {
+  public void runQueries(String fileName) throws IOException, LensAPIException {
     InputStream file = SampleMetastore.class.getClassLoader().getResourceAsStream(fileName);
-    BufferedReader reader = new BufferedReader(new InputStreamReader(file));
+    BufferedReader reader = new BufferedReader(new InputStreamReader(file, "UTF-8"));
     String query;
     while ((query = reader.readLine()) != null) {
       if (StringUtils.isBlank(query)) {
@@ -128,7 +132,7 @@ public class SampleQueries {
       }
       total++;
       System.out.println("Query:" + query);
-      QueryHandle handle = queryClient.executeQuery(query, true, null);
+      QueryHandle handle = queryClient.executeQuery(query, true, null).getData();
       System.out.println("Status:" + queryClient.getQuery().getStatus());
       System.out.println("Total time in millis:"
         + (queryClient.getQuery().getFinishTime() - queryClient.getQuery().getSubmissionTime()));

@@ -22,20 +22,19 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.apache.lens.server.api.error.LensException;
+
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.hive.ql.parse.SemanticException;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Accepts strings of all expressions and constructs HQL query.
- * 
- * Making this as an abstract class because it provides constructors without all
- * expressions being set.
+ * <p></p>
+ * Making this as an abstract class because it provides constructors without all expressions being set.
  */
+@Slf4j
 public abstract class SimpleHQLContext implements HQLContextInterface {
-
-  public static Log LOG = LogFactory.getLog(SimpleHQLContext.class.getName());
 
   private String select;
   private String from;
@@ -49,7 +48,7 @@ public abstract class SimpleHQLContext implements HQLContextInterface {
   }
 
   SimpleHQLContext(String select, String from, String where, String groupby, String orderby, String having,
-      Integer limit) {
+    Integer limit) {
     this.select = select;
     this.from = from;
     this.where = where;
@@ -69,26 +68,26 @@ public abstract class SimpleHQLContext implements HQLContextInterface {
 
   /**
    * Set all missing expressions of HQL context.
-   * 
-   * Leaving this empty implementation for the case of all expressions being
-   * passed in constructor. If other constructors are used the missing
-   * expressions should be set here
+   * <p></p>
+   * Leaving this empty implementation for the case of all expressions being passed in constructor. If other
+   * constructors are used the missing expressions should be set here
+   * @throws LensException
    */
-  protected void setMissingExpressions() throws SemanticException {
+  protected void setMissingExpressions() throws LensException {
   }
 
-  public String toHQL() throws SemanticException {
+  public String toHQL() throws LensException {
     setMissingExpressions();
     String qfmt = getQueryFormat();
     Object[] queryTreeStrings = getQueryTreeStrings();
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("qfmt:" + qfmt + " Query strings: " + Arrays.toString(queryTreeStrings));
+    if (log.isDebugEnabled()) {
+      log.debug("qfmt: {} Query strings: {}", qfmt, Arrays.toString(queryTreeStrings));
     }
     String baseQuery = String.format(qfmt, queryTreeStrings);
     return baseQuery;
   }
 
-  private String[] getQueryTreeStrings() throws SemanticException {
+  private String[] getQueryTreeStrings() throws LensException {
     List<String> qstrs = new ArrayList<String>();
     qstrs.add(select);
     qstrs.add(from);

@@ -18,22 +18,38 @@
  */
 package org.apache.lens.server.scheduler;
 
-import org.apache.hive.service.cli.CLIService;
-import org.apache.lens.server.LensService;
+import org.apache.lens.server.BaseLensService;
+import org.apache.lens.server.api.health.HealthStatus;
 import org.apache.lens.server.api.scheduler.QuerySchedulerService;
+
+import org.apache.hive.service.cli.CLIService;
 
 /**
  * The Class QuerySchedulerServiceImpl.
  */
-public class QuerySchedulerServiceImpl extends LensService implements QuerySchedulerService {
+public class QuerySchedulerServiceImpl extends BaseLensService implements QuerySchedulerService {
+
+  /**
+   * The constant name for scheduler service.
+   */
+  public static final String NAME = "scheduler";
 
   /**
    * Instantiates a new query scheduler service impl.
    *
-   * @param cliService
-   *          the cli service
+   * @param cliService the cli service
    */
   public QuerySchedulerServiceImpl(CLIService cliService) {
-    super("scheduler", cliService);
+    super(NAME, cliService);
+  }
+
+  /**
+   * @inheritDoc
+   */
+  @Override
+  public HealthStatus getHealthStatus() {
+    return this.getServiceState().equals(STATE.STARTED)
+        ? new HealthStatus(true, "Query scheduler service is healthy.")
+        : new HealthStatus(false, "Query scheduler service is down.");
   }
 }

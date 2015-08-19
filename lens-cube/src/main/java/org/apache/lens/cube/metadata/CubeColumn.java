@@ -18,10 +18,20 @@
  */
 package org.apache.lens.cube.metadata;
 
+import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
+import java.util.TimeZone;
 
+import org.apache.lens.cube.parse.TimeRange;
+
+import com.google.common.base.Optional;
+
+import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public abstract class CubeColumn implements Named {
 
   private final String name;
@@ -30,7 +40,16 @@ public abstract class CubeColumn implements Named {
   private final Double cost;
   private final String description;
   private final String displayString;
-  static SimpleDateFormat columnTimeFormat = new SimpleDateFormat("yyyy-MM-dd-HH");
+
+  static final ThreadLocal<DateFormat> COLUMN_TIME_FORMAT =
+    new ThreadLocal<DateFormat>() {
+      @Override
+      protected SimpleDateFormat initialValue() {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd-HH");
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+        return sdf;
+      }
+    };
 
   public CubeColumn(String name, String description, String displayString, Date startTime, Date endTime, Double cost) {
     assert (name != null);
@@ -43,12 +62,17 @@ public abstract class CubeColumn implements Named {
   }
 
   private Date getDate(String propKey, Map<String, String> props) {
-    String timeKey = props.get(propKey);
-    if (timeKey != null) {
+    String timeStr = props.get(propKey);
+    return getDate(timeStr);
+  }
+
+  protected Date getDate(String timeStr) {
+    if (timeStr != null) {
       try {
-        return columnTimeFormat.parse(timeKey);
+        return COLUMN_TIME_FORMAT.get().parse(timeStr);
       } catch (Exception e) {
         // ignore and return null
+        log.warn("Column time passed:{} is not parsable, its ignored", timeStr, e);
       }
     }
     return null;
@@ -61,6 +85,7 @@ public abstract class CubeColumn implements Named {
         return Double.parseDouble(doubleStr);
       } catch (Exception e) {
         // ignore and return null
+        log.warn("Property {} value {} is not parsable, its ignored", propKey, doubleStr, e);
       }
     }
     return null;
@@ -93,6 +118,33 @@ public abstract class CubeColumn implements Named {
     return endTime;
   }
 
+  public Optional<Long> getStartTimeMillisSinceEpoch() {
+
+    if (startTime != null) {
+      return Optional.of(startTime.getTime());
+    }
+    return Optional.absent();
+  }
+
+  public Optional<Long> getEndTimeMillisSinceEpoch() {
+
+    if (endTime != null) {
+      return Optional.of(endTime.getTime());
+    }
+    return Optional.absent();
+  }
+
+  public boolean isColumnAvailableInTimeRange(final TimeRange range) {
+    return isColumnAvailableFrom(range.getFromDate()) && isColumnAvailableTill(range.getToDate());
+  }
+
+  public boolean isColumnAvailableFrom(@NonNull final Date date) {
+    return (getStartTime() == null) ? true : date.equals(getStartTime()) || date.after(getStartTime());
+  }
+
+  public boolean isColumnAvailableTill(@NonNull final Date date) {
+    return (getEndTime() == null) ? true : date.equals(getEndTime()) || date.before(getEndTime());
+  }
   /**
    * @return the cost
    */
@@ -128,11 +180,11 @@ public abstract class CubeColumn implements Named {
     }
     if (startTime != null) {
       builder.append("#start:");
-      builder.append(columnTimeFormat.format(startTime));
+      builder.append(COLUMN_TIME_FORMAT.get().format(startTime));
     }
     if (endTime != null) {
       builder.append("#end:");
-      builder.append(columnTimeFormat.format(endTime));
+      builder.append(COLUMN_TIME_FORMAT.get().format(endTime));
     }
     if (cost != null) {
       builder.append(":");
@@ -149,8 +201,9 @@ public abstract class CubeColumn implements Named {
     result = prime * result + ((getDescription() == null) ? 0 : getDescription().toLowerCase().hashCode());
     result = prime * result + ((getDisplayString() == null) ? 0 : getDisplayString().toLowerCase().hashCode());
     result = prime * result + ((getName() == null) ? 0 : getName().toLowerCase().hashCode());
-    result = prime * result + ((getStartTime() == null) ? 0 : columnTimeFormat.format(getStartTime()).hashCode());
-    result = prime * result + ((getEndTime() == null) ? 0 : columnTimeFormat.format(getEndTime()).hashCode());
+    result = prime * result + ((getStartTime() == null) ? 0 : COLUMN_TIME_FORMAT.get().format(
+      getStartTime()).hashCode());
+    result = prime * result + ((getEndTime() == null) ? 0 : COLUMN_TIME_FORMAT.get().format(getEndTime()).hashCode());
     result = prime * result + ((getCost() == null) ? 0 : getCost().hashCode());
     return result;
   }
@@ -197,7 +250,8 @@ public abstract class CubeColumn implements Named {
       }
     } else if (other.getStartTime() == null) {
       return false;
-    } else if (!columnTimeFormat.format(this.getStartTime()).equals(columnTimeFormat.format(other.getStartTime()))) {
+    } else if (!COLUMN_TIME_FORMAT.get().format(this.getStartTime()).equals(COLUMN_TIME_FORMAT.get().format(
+      other.getStartTime()))) {
       return false;
     }
 
@@ -207,7 +261,8 @@ public abstract class CubeColumn implements Named {
       }
     } else if (other.getEndTime() == null) {
       return false;
-    } else if (!columnTimeFormat.format(this.getEndTime()).equals(columnTimeFormat.format(other.getEndTime()))) {
+    } else if (!COLUMN_TIME_FORMAT.get().format(this.getEndTime()).equals(COLUMN_TIME_FORMAT.get().format(
+      other.getEndTime()))) {
       return false;
     }
 
@@ -229,10 +284,10 @@ public abstract class CubeColumn implements Named {
       props.put(MetastoreUtil.getCubeColDisplayKey(getName()), displayString);
     }
     if (startTime != null) {
-      props.put(MetastoreUtil.getCubeColStartTimePropertyKey(getName()), columnTimeFormat.format(startTime));
+      props.put(MetastoreUtil.getCubeColStartTimePropertyKey(getName()), COLUMN_TIME_FORMAT.get().format(startTime));
     }
     if (endTime != null) {
-      props.put(MetastoreUtil.getCubeColEndTimePropertyKey(getName()), columnTimeFormat.format(endTime));
+      props.put(MetastoreUtil.getCubeColEndTimePropertyKey(getName()), COLUMN_TIME_FORMAT.get().format(endTime));
     }
     if (cost != null) {
       props.put(MetastoreUtil.getCubeColCostPropertyKey(getName()), cost.toString());

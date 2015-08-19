@@ -1,4 +1,4 @@
-/**
+  /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -18,31 +18,34 @@
  */
 package org.apache.lens.cli;
 
+import static org.testng.Assert.*;
+
 import java.io.*;
 import java.net.URISyntaxException;
 import java.net.URL;
 
+import javax.ws.rs.NotFoundException;
+
+import org.apache.lens.cli.commands.LensDimensionCommands;
 import org.apache.lens.cli.commands.LensDimensionTableCommands;
 import org.apache.lens.client.LensClient;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.testng.Assert;
 import org.testng.annotations.Test;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * The Class TestLensDimensionTableCommands.
  */
+@Slf4j
 public class TestLensDimensionTableCommands extends LensCliApplicationTest {
-
-  /** The Constant LOG. */
-  private static final Logger LOG = LoggerFactory.getLogger(TestLensDimensionTableCommands.class);
 
   /** The Constant DIM_LOCAL. */
   public static final String DIM_LOCAL = "dim_local";
 
   /** The command. */
   private static LensDimensionTableCommands command = null;
+  private static LensDimensionCommands dimensionCommand = null;
 
   private static LensDimensionTableCommands getCommand() {
     if (command == null) {
@@ -53,52 +56,89 @@ public class TestLensDimensionTableCommands extends LensCliApplicationTest {
     return command;
   }
 
+  private static LensDimensionCommands getDimensionCommand() {
+    if (dimensionCommand == null) {
+      LensClient client = new LensClient();
+      dimensionCommand = new LensDimensionCommands();
+      dimensionCommand.setClient(client);
+    }
+    return dimensionCommand;
+  }
+
+
   /**
    * Test dim table commands.
+   *
    * @throws IOException
    * @throws URISyntaxException
    */
   @Test
   public void testDimTableCommands() throws IOException, URISyntaxException {
+    createDimension();
     addDim1Table("dim_table2", "dim_table2.xml", DIM_LOCAL);
     updateDim1Table();
     testDimStorageActions();
     testDimPartitionActions();
     dropDim1Table();
+    dropDimension();
+  }
+
+  private void dropDimension() {
+    getDimensionCommand().dropDimension("test_dim");
+  }
+
+  private void createDimension() throws URISyntaxException {
+    URL dimensionSpec = TestLensDimensionTableCommands.class.getClassLoader().getResource("test-dimension.xml");
+    getDimensionCommand().createDimension(new File(dimensionSpec.toURI()));
+
   }
 
   /**
    * Adds the dim1 table.
    *
-   * @param tableName
-   *          the table name
-   * @param specName
-   *          the spec name
-   * @param storageName
-   *          the storage name
+   * @param tableName   the table name
+   * @param specName    the spec name
+   * @param storageName the storage name
    * @throws IOException
    */
   public static synchronized void addDim1Table(String tableName, String specName, String storageName)
     throws IOException {
     LensDimensionTableCommands command = getCommand();
-    String dimList = command.showDimensionTables();
+    String dimList = command.showDimensionTables(null);
+    assertEquals(dimList, "No dimensiontable found");
+    assertEquals(command.showDimensionTables("test_dim"), "No dimensiontable found for test_dim");
+
     // add local storage before adding fact table
     TestLensStorageCommands.addLocalStorage(storageName);
     URL dimSpec = TestLensDimensionTableCommands.class.getClassLoader().getResource(specName);
 
     try {
-      command.createDimensionTable(new File(dimSpec.toURI()).getAbsolutePath());
+      command.createDimensionTable(new File(dimSpec.toURI()));
     } catch (Exception e) {
-      e.printStackTrace();
-      Assert.fail("Unable to create dimtable" + e.getMessage());
+      log.error("Unable to create dimtable", e);
+      fail("Unable to create dimtable" + e.getMessage());
     }
 
-    dimList = command.showDimensionTables();
-    Assert.assertTrue(dimList.contains(tableName), "dim_table table should be found");
+    dimList = command.showDimensionTables(null);
+    assertEquals(command.showDimensionTables("test_dim"), dimList);
+    try {
+      assertEquals(command.showDimensionTables("blah"), dimList);
+      fail();
+    } catch (NotFoundException e) {
+      log.info("blah is not a table", e);
+    }
+    try {
+      assertEquals(command.showDimensionTables("dim_table2"), dimList);
+      fail();
+    } catch (NotFoundException e) {
+      log.info("dim_table2 is a table, but not a dimension", e);
+    }
+    assertTrue(dimList.contains(tableName), "dim_table table should be found");
   }
 
   /**
    * Update dim1 table.
+   *
    * @throws IOException
    */
   private static void updateDim1Table() throws IOException {
@@ -115,27 +155,27 @@ public class TestLensDimensionTableCommands extends LensCliApplicationTest {
 
     String xmlContent = sb.toString();
 
-    xmlContent = xmlContent.replace("<property name=\"dim2.prop\" value=\"d2\" />",
-        "<property name=\"dim2.prop\" value=\"d1\"/>" + "\n<property name=\"dim2.prop1\" value=\"d2\"/>\n");
+    xmlContent = xmlContent.replace("<property name=\"dim2.prop\" value=\"d2\"/>",
+      "<property name=\"dim2.prop\" value=\"d1\"/>" + "\n<property name=\"dim2.prop1\" value=\"d2\"/>\n");
 
-    File newFile = new File("/tmp/local-dim1.xml");
+    File newFile = new File("target/local-dim1.xml");
     try {
       Writer writer = new OutputStreamWriter(new FileOutputStream(newFile));
       writer.write(xmlContent);
       writer.close();
 
       String desc = command.describeDimensionTable("dim_table2");
-      LOG.debug(desc);
+      log.debug(desc);
       String propString = "name : dim2.prop  value : d2";
       String propString1 = "name : dim2.prop  value : d1";
       String propString2 = "name : dim2.prop1  value : d2";
-      Assert.assertTrue(desc.contains(propString));
+      assertTrue(desc.contains(propString));
 
-      command.updateDimensionTable("dim_table2 /tmp/local-dim1.xml");
+      command.updateDimensionTable("dim_table2", new File("target/local-dim1.xml"));
       desc = command.describeDimensionTable("dim_table2");
-      LOG.debug(desc);
-      Assert.assertTrue(desc.contains(propString1));
-      Assert.assertTrue(desc.contains(propString2));
+      log.debug(desc);
+      assertTrue(desc.contains(propString1));
+      assertTrue(desc.contains(propString2));
 
     } finally {
       newFile.delete();
@@ -144,76 +184,118 @@ public class TestLensDimensionTableCommands extends LensCliApplicationTest {
 
   /**
    * Test dim storage actions.
+   *
    * @throws URISyntaxException
    */
   private static void testDimStorageActions() throws URISyntaxException {
     LensDimensionTableCommands command = getCommand();
     String result = command.getDimStorages("dim_table2");
-    Assert.assertEquals(DIM_LOCAL, result);
+    assertEquals(DIM_LOCAL, result);
     command.dropAllDimStorages("dim_table2");
     result = command.getDimStorages("dim_table2");
-    Assert.assertEquals("No storages found for dim_table2", result);
+    assertEquals(result, "No storage found for dim_table2");
     addLocalStorageToDim();
     result = command.getDimStorages("dim_table2");
-    Assert.assertNotEquals("No storages found for dim_table2", result);
-    command.dropStorageFromDim("dim_table2 " + DIM_LOCAL);
+    assertNotEquals(result, "No storage found for dim_table2");
+    command.dropStorageFromDim("dim_table2", DIM_LOCAL);
     result = command.getDimStorages("dim_table2");
-    Assert.assertEquals("No storages found for dim_table2", result);
+    assertEquals(result, "No storage found for dim_table2");
     addLocalStorageToDim();
   }
 
   /**
    * Adds the local storage to dim.
+   *
    * @throws URISyntaxException
    */
   private static void addLocalStorageToDim() throws URISyntaxException {
     LensDimensionTableCommands command = getCommand();
     String result;
     URL resource = TestLensDimensionTableCommands.class.getClassLoader().getResource("dim-local-storage-element.xml");
-    command.addNewDimStorage("dim_table2 " + new File(resource.toURI()).getAbsolutePath());
+    command.addNewDimStorage("dim_table2", new File(resource.toURI()));
     result = command.getDimStorages("dim_table2");
-    Assert.assertEquals(DIM_LOCAL, result);
+    assertEquals(DIM_LOCAL, result);
 
-    result = command.getStorageFromDim("dim_table2 " + DIM_LOCAL);
+    result = command.getStorageFromDim("dim_table2", DIM_LOCAL);
     String partString = "DAILY";
-    Assert.assertTrue(result.contains(partString));
+    assertTrue(result.contains(partString));
   }
 
   /**
    * Test dim partition actions.
    */
-  private static void testDimPartitionActions() {
+  private static void testDimPartitionActions() throws URISyntaxException {
     LensDimensionTableCommands command = getCommand();
-    String result;
-    result = command.getAllPartitionsOfDim("dim_table2 " + DIM_LOCAL);
-    Assert.assertTrue(result.trim().isEmpty());
-    addPartitionToStorage("dim_table2", DIM_LOCAL, "dim1-local-part.xml");
-    result = command.getAllPartitionsOfDim("dim_table2 " + DIM_LOCAL);
+    assertTrue(command.getAllPartitionsOfDimtable("dim_table2", DIM_LOCAL, null).trim().isEmpty());
+    //TODO: remove getAbsolutePath()
+    String singlePartPath = new File(
+      TestLensFactCommands.class.getClassLoader().getResource("dim1-local-part.xml").toURI()).getAbsolutePath();
+    String multiplePartsPath = new File(
+      TestLensFactCommands.class.getClassLoader().getResource("dim1-local-parts.xml").toURI()).getAbsolutePath();
+
+    assertTrue(command.getAllPartitionsOfDimtable("dim_table2", DIM_LOCAL, null).trim().isEmpty());
+
+    assertEquals(command.addPartitionToDimtable("dim_table2", DIM_LOCAL, new File(singlePartPath)), SUCCESS_MESSAGE);
+    assertEquals(command.updatePartitionOfDimtable("dim_table2", DIM_LOCAL, new File(singlePartPath)), SUCCESS_MESSAGE);
+    verifyAndDeletePartitions();
+    assertEquals(
+        command.addPartitionsToDimtable("dim_table2", DIM_LOCAL, new File(multiplePartsPath)), SUCCESS_MESSAGE);
+    assertEquals(command.updatePartitionsOfDimtable("dim_table2", DIM_LOCAL, multiplePartsPath), SUCCESS_MESSAGE);
+    verifyAndDeletePartitions();
+
+    // Wrong files:
+    try {
+      command.addPartitionToDimtable("dim_table2", DIM_LOCAL, new File(multiplePartsPath));
+      fail("Should fail");
+    } catch (Throwable t) {
+      // pass
+    }
+    try {
+      command.updatePartitionOfDimtable("dim_table2", DIM_LOCAL, new File(multiplePartsPath));
+      fail("Should fail");
+    } catch (Throwable t) {
+      // pass
+    }
+
+    try {
+      command.addPartitionsToDimtable("dim_table2", DIM_LOCAL, new File(singlePartPath));
+      fail("Should fail");
+    } catch (Throwable t) {
+      // pass
+    }
+
+    try {
+      command.updatePartitionsOfDimtable("dim_table2", DIM_LOCAL, singlePartPath);
+      fail("Should fail");
+    } catch (Throwable t) {
+      // pass
+    }
+  }
+
+  private static void verifyAndDeletePartitions() {
+    String result = command.getAllPartitionsOfDimtable("dim_table2", DIM_LOCAL, null);
     String partString = "DAILY";
-    Assert.assertTrue(result.contains(partString));
-    command.dropAllPartitionsOfDim("dim_table2 " + DIM_LOCAL);
-    result = command.getAllPartitionsOfDim("dim_table2 " + DIM_LOCAL);
-    Assert.assertTrue(result.trim().isEmpty());
+    assertTrue(result.contains(partString));
+    command.dropAllPartitionsOfDim("dim_table2", DIM_LOCAL, null);
+    result = command.getAllPartitionsOfDimtable("dim_table2", DIM_LOCAL, null);
+    assertTrue(result.trim().isEmpty());
   }
 
   /**
    * Adds the partition to storage.
    *
-   * @param tableName
-   *          the table name
-   * @param storageName
-   *          the storage name
-   * @param localPartSpec
-   *          the local part spec
+   * @param tableName     the table name
+   * @param storageName   the storage name
+   * @param localPartSpec the local part spec
    */
   public static void addPartitionToStorage(String tableName, String storageName, String localPartSpec) {
     LensDimensionTableCommands command = getCommand();
     URL resource = TestLensFactCommands.class.getClassLoader().getResource(localPartSpec);
     try {
-      command.addPartitionToFact(tableName + " " + storageName + " " + new File(resource.toURI()).getAbsolutePath());
+      command.addPartitionToDimtable(tableName, storageName, new File(resource.toURI()));
     } catch (Throwable t) {
-      t.printStackTrace();
-      Assert.fail("Unable to locate the storage part file for adding new storage to dim table dim_table2");
+      log.error("Unable to locate the storage part file for adding new storage to dim table dim_table2", t);
+      fail("Unable to locate the storage part file for adding new storage to dim table dim_table2");
     }
   }
 
@@ -222,11 +304,11 @@ public class TestLensDimensionTableCommands extends LensCliApplicationTest {
    */
   public static void dropDim1Table() {
     LensDimensionTableCommands command = getCommand();
-    String dimList = command.showDimensionTables();
-    Assert.assertEquals("dim_table2", dimList, "dim_table table should be found");
+    String dimList = command.showDimensionTables(null);
+    assertEquals("dim_table2", dimList, "dim table should be found");
     command.dropDimensionTable("dim_table2", false);
-    dimList = command.showDimensionTables();
-    Assert.assertEquals("No Dimensions Found", dimList, "Dim tables should not be found");
+    dimList = command.showDimensionTables(null);
+    assertEquals(dimList, "No dimensiontable found", "Dim tables should not be found");
     TestLensStorageCommands.dropStorage(DIM_LOCAL);
   }
 }

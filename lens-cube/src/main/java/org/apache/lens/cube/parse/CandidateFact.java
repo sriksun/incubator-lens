@@ -18,58 +18,65 @@
  */
 package org.apache.lens.cube.parse;
 
-import static org.apache.hadoop.hive.ql.parse.HiveParser.DOT;
-import static org.apache.hadoop.hive.ql.parse.HiveParser.Identifier;
-import static org.apache.hadoop.hive.ql.parse.HiveParser.TOK_FUNCTION;
-import static org.apache.hadoop.hive.ql.parse.HiveParser.TOK_TABLE_OR_COL;
+import static org.apache.hadoop.hive.ql.parse.HiveParser.*;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-import org.antlr.runtime.CommonToken;
+import org.apache.lens.cube.metadata.AbstractCubeTable;
+import org.apache.lens.cube.metadata.CubeFactTable;
+import org.apache.lens.cube.metadata.CubeInterface;
+import org.apache.lens.cube.metadata.FactPartition;
+import org.apache.lens.cube.parse.HQLParser.ASTNodeVisitor;
+import org.apache.lens.cube.parse.HQLParser.TreeNode;
+import org.apache.lens.server.api.error.LensException;
+
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
 import org.apache.hadoop.hive.ql.parse.ParseException;
-import org.apache.hadoop.hive.ql.parse.SemanticException;
 import org.apache.hadoop.hive.ql.session.SessionState;
-import org.apache.lens.cube.metadata.*;
-import org.apache.lens.cube.parse.HQLParser.ASTNodeVisitor;
-import org.apache.lens.cube.parse.HQLParser.TreeNode;
+
+import org.antlr.runtime.CommonToken;
+
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+import lombok.Getter;
 
 /**
  * Holds context of a candidate fact table.
- * 
  */
-class CandidateFact implements CandidateTable {
-  public static Log LOG = LogFactory.getLog(CandidateFact.class.getName());
+public class CandidateFact implements CandidateTable {
   final CubeFactTable fact;
-  Set<String> storageTables;
-  // flag to know if querying multiple storage tables is enabled for this fact
-  boolean enabledMultiTableSelect;
-  int numQueriedParts = 0;
-  final Map<TimeRange, String> rangeToWhereClause = new HashMap<TimeRange, String>();
-  private boolean dbResolved = false;
+  @Getter
+  private Set<String> storageTables;
+  @Getter
+  private int numQueriedParts = 0;
+  @Getter
+  private final Set<FactPartition> partsQueried = Sets.newHashSet();
+  @Getter
+  private final Map<TimeRange, String> rangeToWhereClause = Maps.newHashMap();
+
   private CubeInterface baseTable;
   private ASTNode selectAST;
   private ASTNode whereAST;
   private ASTNode groupbyAST;
   private ASTNode havingAST;
-  List<TimeRangeNode> timenodes = new ArrayList<TimeRangeNode>();
-  private final List<Integer> selectIndices = new ArrayList<Integer>();
-  private final List<Integer> dimFieldIndices = new ArrayList<Integer>();
+  private ASTNode joinTree;
+  private List<TimeRangeNode> timenodes = Lists.newArrayList();
+  private final List<Integer> selectIndices = Lists.newArrayList();
+  private final List<Integer> dimFieldIndices = Lists.newArrayList();
   private Collection<String> columns;
+  @Getter
+  private final Map<String, String> storgeWhereClauseMap = new HashMap<String, String>();
+  @Getter
+  private final Map<TimeRange, Map<String, LinkedHashSet<FactPartition>>> rangeToStoragePartMap =
+    new HashMap<TimeRange, Map<String, LinkedHashSet<FactPartition>>>();
+  @Getter
+  private final Map<TimeRange, Map<String, String>> rangeToStorageWhereMap =
+    new HashMap<TimeRange, Map<String, String>>();
 
   CandidateFact(CubeFactTable fact, CubeInterface cube) {
     this.fact = fact;
@@ -91,6 +98,10 @@ class CandidateFact implements CandidateTable {
     return columns;
   }
 
+  public boolean isValidForTimeRange(TimeRange timeRange) {
+    return (!timeRange.getFromDate().before(fact.getStartTime())) && (!timeRange.getToDate().after(fact.getEndTime()));
+  }
+
   static class TimeRangeNode {
     ASTNode timenode;
     ASTNode parent;
@@ -103,7 +114,11 @@ class CandidateFact implements CandidateTable {
     }
   }
 
-  private void updateTimeRanges(ASTNode root, ASTNode parent, int childIndex) throws SemanticException {
+  void incrementPartsQueried(int incr) {
+    numQueriedParts += incr;
+  }
+
+  private void updateTimeRanges(ASTNode root, ASTNode parent, int childIndex) throws LensException {
     if (root == null) {
       return;
     } else if (root.getToken().getType() == TOK_FUNCTION) {
@@ -120,9 +135,12 @@ class CandidateFact implements CandidateTable {
   }
 
   // copy ASTs from CubeQueryContext
-  public void copyASTs(CubeQueryContext cubeql) throws SemanticException {
+  public void copyASTs(CubeQueryContext cubeql) throws LensException {
     this.selectAST = HQLParser.copyAST(cubeql.getSelectAST());
     this.whereAST = HQLParser.copyAST(cubeql.getWhereAST());
+    if (cubeql.getJoinTree() != null) {
+      this.joinTree = HQLParser.copyAST(cubeql.getJoinTree());
+    }
     if (cubeql.getGroupByAST() != null) {
       this.groupbyAST = HQLParser.copyAST(cubeql.getGroupByAST());
     }
@@ -133,7 +151,11 @@ class CandidateFact implements CandidateTable {
     updateTimeRanges(this.whereAST, null, 0);
   }
 
-  public void updateTimeranges(CubeQueryContext cubeql) throws SemanticException {
+  public String getWhereClause(String storageTable) {
+    return getStorgeWhereClauseMap().get(storageTable);
+  }
+
+  public void updateTimeranges(CubeQueryContext cubeql) throws LensException {
     // Update WhereAST with range clause
     // resolve timerange positions and replace it by corresponding where clause
     for (int i = 0; i < cubeql.getTimeRanges().size(); i++) {
@@ -144,7 +166,7 @@ class CandidateFact implements CandidateTable {
         try {
           rangeAST = HQLParser.parseExpr(rangeWhere);
         } catch (ParseException e) {
-          throw new SemanticException(e);
+          throw new LensException(e);
         }
         rangeAST.setParent(timenodes.get(i).parent);
         timenodes.get(i).parent.setChild(timenodes.get(i).childIndex, rangeAST);
@@ -153,23 +175,22 @@ class CandidateFact implements CandidateTable {
   }
 
   /**
-   * Update the ASTs to include only the fields queried from this fact, in all
-   * the expressions
-   * 
+   * Update the ASTs to include only the fields queried from this fact, in all the expressions
+   *
    * @param cubeql
-   * @throws SemanticException
+   * @throws LensException
    */
-  public void updateASTs(CubeQueryContext cubeql) throws SemanticException {
-    Set<String> cubeColsQueried = cubeql.getColumnsQueried(cubeql.getCube().getName());
+  public void updateASTs(CubeQueryContext cubeql) throws LensException {
+    Set<String> cubeCols = cubeql.getCube().getAllFieldNames();
 
     // update select AST with selected fields
     int currentChild = 0;
     for (int i = 0; i < cubeql.getSelectAST().getChildCount(); i++) {
       ASTNode selectExpr = (ASTNode) this.selectAST.getChild(currentChild);
-      Set<String> exprCols = getColsInExpr(cubeColsQueried, selectExpr);
+      Set<String> exprCols = getColsInExpr(cubeql, cubeCols, selectExpr);
       if (getColumns().containsAll(exprCols)) {
         selectIndices.add(i);
-        if (cubeql.getQueriedDimAttrs().containsAll(exprCols)) {
+        if (cubeql.getCube().getDimAttributeNames().containsAll(exprCols)) {
           dimFieldIndices.add(i);
         }
         ASTNode aliasNode = HQLParser.findNodeByPath(selectExpr, Identifier);
@@ -180,7 +201,7 @@ class CandidateFact implements CandidateTable {
             // replace the alias node
             ASTNode newAliasNode = new ASTNode(new CommonToken(HiveParser.Identifier, alias));
             this.selectAST.getChild(currentChild).replaceChildren(selectExpr.getChildCount() - 1,
-                selectExpr.getChildCount() - 1, newAliasNode);
+              selectExpr.getChildCount() - 1, newAliasNode);
           }
         } else {
           // add column alias
@@ -201,7 +222,8 @@ class CandidateFact implements CandidateTable {
     // TODO
   }
 
-  private Set<String> getColsInExpr(final Set<String> cubeCols, ASTNode expr) throws SemanticException {
+  private Set<String> getColsInExpr(final CubeQueryContext cubeql, final Set<String> cubeCols,
+    ASTNode expr) throws LensException {
     final Set<String> cubeColsInExpr = new HashSet<String>();
     HQLParser.bft(expr, new ASTNodeVisitor() {
       @Override
@@ -220,9 +242,10 @@ class CandidateFact implements CandidateTable {
             cubeColsInExpr.add(column);
           }
         } else if (node.getToken().getType() == DOT) {
+          String alias = HQLParser.findNodeByPath(node, TOK_TABLE_OR_COL, Identifier).getText().toLowerCase();
           ASTNode colIdent = (ASTNode) node.getChild(1);
           String column = colIdent.getText().toLowerCase();
-          if (cubeCols.contains(column)) {
+          if (cubeql.getAliasForTableName(cubeql.getCube()).equalsIgnoreCase(alias) && cubeCols.contains(column)) {
             cubeColsInExpr.add(column);
           }
         }
@@ -232,21 +255,24 @@ class CandidateFact implements CandidateTable {
     return cubeColsInExpr;
   }
 
+  @Override
   public String getStorageString(String alias) {
-    if (!dbResolved) {
-      String database = SessionState.get().getCurrentDatabase();
-      // Add database name prefix for non default database
-      if (StringUtils.isNotBlank(database) && !"default".equalsIgnoreCase(database)) {
-        Set<String> storageTbls = new HashSet<String>();
-        Iterator<String> names = storageTables.iterator();
-        while (names.hasNext()) {
-          storageTbls.add(database + "." + names.next());
-        }
-        this.storageTables = storageTbls;
-      }
-      dbResolved = true;
-    }
     return StringUtils.join(storageTables, ",") + " " + alias;
+  }
+
+  public void setStorageTables(Set<String> storageTables) {
+    String database = SessionState.get().getCurrentDatabase();
+    // Add database name prefix for non default database
+    if (StringUtils.isNotBlank(database) && !"default".equalsIgnoreCase(database)) {
+      Set<String> storageTbls = new HashSet<String>();
+      Iterator<String> names = storageTables.iterator();
+      while (names.hasNext()) {
+        storageTbls.add(database + "." + names.next());
+      }
+      this.storageTables = storageTbls;
+    } else {
+      this.storageTables = storageTables;
+    }
   }
 
   @Override
@@ -320,8 +346,7 @@ class CandidateFact implements CandidateTable {
   }
 
   /**
-   * @param selectAST
-   *          the selectAST to set
+   * @param selectAST the selectAST to set
    */
   public void setSelectAST(ASTNode selectAST) {
     this.selectAST = selectAST;
@@ -335,8 +360,7 @@ class CandidateFact implements CandidateTable {
   }
 
   /**
-   * @param whereAST
-   *          the whereAST to set
+   * @param whereAST the whereAST to set
    */
   public void setWhereAST(ASTNode whereAST) {
     this.whereAST = whereAST;
@@ -350,8 +374,7 @@ class CandidateFact implements CandidateTable {
   }
 
   /**
-   * @param havingAST
-   *          the havingAST to set
+   * @param havingAST the havingAST to set
    */
   public void setHavingAST(ASTNode havingAST) {
     this.havingAST = havingAST;
@@ -382,24 +405,25 @@ class CandidateFact implements CandidateTable {
     return null;
   }
 
-  public Set<String> getTimePartCols() throws SemanticException {
+  public Set<String> getTimePartCols(CubeQueryContext query) throws LensException {
     Set<String> cubeTimeDimensions = baseTable.getTimedDimensions();
     Set<String> timePartDimensions = new HashSet<String>();
     String singleStorageTable = storageTables.iterator().next();
-    if(!dbResolved) {
-      singleStorageTable = SessionState.get().getCurrentDatabase() + "." + singleStorageTable;
-    }
     List<FieldSchema> partitionKeys = null;
     try {
-      partitionKeys = Hive.get().getTable(singleStorageTable).getPartitionKeys();
+      partitionKeys = query.getMetastoreClient().getTable(singleStorageTable).getPartitionKeys();
     } catch (HiveException e) {
-      throw new SemanticException(e);
+      throw new LensException(e);
     }
-    for(FieldSchema fs: partitionKeys) {
-      if(cubeTimeDimensions.contains(CubeQueryContext.getTimeDimOfPartitionColumn(baseTable, fs.getName()))) {
+    for (FieldSchema fs : partitionKeys) {
+      if (cubeTimeDimensions.contains(CubeQueryContext.getTimeDimOfPartitionColumn(baseTable, fs.getName()))) {
         timePartDimensions.add(fs.getName());
       }
     }
     return timePartDimensions;
+  }
+
+  public ASTNode getJoinTree() {
+    return joinTree;
   }
 }

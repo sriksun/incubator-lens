@@ -18,14 +18,23 @@
  */
 package org.apache.lens.server.api.driver;
 
-import org.apache.lens.api.LensException;
 import org.apache.lens.api.query.PersistentQueryResult;
 import org.apache.lens.api.query.QueryResult;
+import org.apache.lens.server.api.error.LensException;
 
 /**
  * The Class PersistentResultSet.
  */
 public abstract class PersistentResultSet extends LensResultSet {
+
+  /**
+   * Get the size of the result set file.
+   *
+   * @return The size if available, null if not available.
+   * @throws LensException the lens exception
+   */
+  public abstract Long fileSize() throws LensException;
+
   public abstract String getOutputPath() throws LensException;
 
   /*
@@ -34,6 +43,6 @@ public abstract class PersistentResultSet extends LensResultSet {
    * @see org.apache.lens.server.api.driver.LensResultSet#toQueryResult()
    */
   public QueryResult toQueryResult() throws LensException {
-    return new PersistentQueryResult(getOutputPath(), size());
+    return new PersistentQueryResult(getOutputPath(), size(), fileSize());
   }
 }

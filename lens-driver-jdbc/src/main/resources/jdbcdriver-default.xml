@@ -83,6 +83,69 @@
     </description>
   </property>
 
+  <!-- Estimate query connection pool settings -->
+  <property>
+    <name>lens.driver.jdbc.estimate.driver.class</name>
+    <value></value>
+    <description>Type of JDBC driver used to connect backend database for estimate queries. If
+    This property is not specified, value for lens.driver.jdbc.driver.class will be used.
+      Override this property to tune estimate connection pool</description>
+  </property>
+
+  <property>
+    <name>lens.driver.jdbc.estimate.db.uri</name>
+    <value></value>
+    <description>JDBC connection URL in the format jdbc:dbms://host:port/dbname for estimate queries.
+    If this property is unspecified, value for lens.driver.jdbc.db.uri will be used.</description>
+  </property>
+
+  <property>
+    <name>lens.driver.jdbc.estimate.db.user</name>
+    <value></value>
+    <description>The database user on whose behalf the connection is being made, for estimate queries.
+    If this property is unspecified, value for lens.driver.jdbc.db.user would be used.
+      Override this property to tune estimate connection pool</description>
+  </property>
+
+  <property>
+    <name>lens.driver.jdbc.estimate.db.password</name>
+    <value></value>
+    <description>The database user's password, for estimate queries. If this property is unspecified,
+      value for lens.driver.jdbc.db.password would be used.
+      Override this property to tune estimate connection pool</description>
+  </property>
+
+  <property>
+    <name>lens.driver.jdbc.estimate.pool.max.size</name>
+    <value></value>
+    <description>Maximum number of concurrent connections allowed in pool, for estimate queries.
+    If this property is unspecified, value for lens.driver.jdbc.pool.max.size would be used.
+      Override this property to tune estimate connection pool</description>
+  </property>
+
+  <property>
+    <name>lens.driver.jdbc.estimate.pool.idle.time</name>
+    <value></value>
+    <description>Maximum idle time in sec before a connection is closed, for estimate queries.
+    If this property is not specified, value for lens.driver.jdbc.pool.idle.time would be used.
+      Override this property to tune estimate connection pool.</description>
+  </property>
+
+  <property>
+    <name>lens.driver.jdbc.estimate.pool.max.statements</name>
+    <value></value>
+    <description>Maximum number of prepared statements to cache per connection, for estimate queries.
+    If this property is not specified, value for lens.driver.jdbc.pool.max.statements would be used.</description>
+  </property>
+
+  <property>
+    <name>lens.driver.jdbc.estimate.get.connection.timeout</name>
+    <value></value>
+    <description>Response timeout in milliseconds of any JDBC call invoking data transmission over a connection socket
+    , for estimate queries. If this property is not specified, value for lens.driver.jdbc.get.connection.timeout
+    would be used. Override this property to tune estimate connection pool.</description>
+  </property>
+
   <property>
     <name>lens.driver.jdbc.explain.keyword</name>
     <value>Explain</value>
@@ -97,12 +160,6 @@
     <description>List of comma separated storage names that supported by a driver. If no value is specified, all
       storages are valid
     </description>
-  </property>
-
-  <property>
-    <name>lens.cube.query.enable.multi.table.select</name>
-    <value>false</value>
-    <description>Tells whether multiple tables are allowed in from clause of final HQL query</description>
   </property>
 
   <property>
@@ -144,4 +201,35 @@
     <description>Fetch size for JDBC result set</description>
   </property>
 
+  <property>
+    <name>lens.driver.jdbc.validate.through.prepare</name>
+    <value>true</value>
+    <description>Flag to enable query syntactic and semantic validation using prepared statement.</description>
+  </property>
+
+  <property>
+    <name>lens.driver.jdbc.query.launching.constraint.factories</name>
+    <value>org.apache.lens.server.api.query.constraint.MaxConcurrentDriverQueriesConstraintFactory</value>
+    <description>Factories used to instantiate constraints enforced on queries by driver. A query will be launched
+      only if all constraints pass. Every Factory should be an implementation of
+      org.apache.lens.server.api.common.ConfigBasedObjectCreationFactory and create an implementation of
+      org.apache.lens.server.api.query.constraint.QueryLaunchingConstraint.</description>
+  </property>
+
+  <property>
+    <name>lens.driver.jdbc.waiting.queries.selection.policy.factories</name>
+    <value>org.apache.lens.server.api.query.collect.DriverSpecificWaitingQueriesSelectionPolicyFactory</value>
+    <description>Factories used to instantiate driver specific waiting queries selection policies. Every factory should
+      be an implementation of org.apache.lens.server.api.common.ConfigBasedObjectCreationFactory and create an
+      implementation of org.apache.lens.server.api.query.collect.WaitingQueriesSelectionPolicy.</description>
+  </property>
+
+  <property>
+    <name>driver.max.concurrent.launched.queries</name>
+    <value>15</value>
+    <description>Maximum queries which can be launched simultaneously on this driver. This should be equal to
+      lens.driver.jdbc.pool.max.size. This configuration value is only useful when MaxConcurrentDriverQueriesConstraint
+      is enabled by using org.apache.lens.server.api.query.constraint.MaxConcurrentDriverQueriesConstraintFactory as
+      one of the factories in lens.driver.jdbc.query.constraint.factories property.</description>
+  </property>
 </configuration>

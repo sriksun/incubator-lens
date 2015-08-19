@@ -22,12 +22,12 @@ package org.apache.lens.server.api.session;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.lens.api.LensException;
 import org.apache.lens.api.LensSessionHandle;
+import org.apache.lens.server.api.error.LensException;
 
 public interface SessionService {
 
-  /** The Constant NAME. */
+  /** Name of session service */
   String NAME = "session";
 
   /**
@@ -35,12 +35,14 @@ public interface SessionService {
    *
    * @param username      the username
    * @param password      the password
+   * @param database      Set current database to the supplied value
    * @param configuration the configuration
    * @return the lens session handle
    * @throws LensException the lens exception
    */
 
-  LensSessionHandle openSession(String username, String password, Map<String, String> configuration)
+  LensSessionHandle openSession(String username, String password, String database,
+                                Map<String, String> configuration)
     throws LensException;
 
   /**
@@ -69,7 +71,6 @@ public interface SessionService {
    * @param sessionHandle the session handle
    * @param type          the type
    * @param path          the path
-   * @throws LensException the lens exception
    */
 
   void addResource(LensSessionHandle sessionHandle, String type, String path);
@@ -80,7 +81,6 @@ public interface SessionService {
    * @param sessionHandle the session handle
    * @param type          the type
    * @param path          the path
-   * @throws LensException the lens exception
    */
 
   void deleteResource(LensSessionHandle sessionHandle, String type, String path);
@@ -127,4 +127,9 @@ public interface SessionService {
    *           Lists all resources if resource type is null
    */
   List<String> listAllResources(LensSessionHandle sessionHandle, String type);
+
+  /**
+   * Returns true if the session is open
+   */
+  boolean isOpen(LensSessionHandle sessionHandle);
 }

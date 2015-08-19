@@ -23,9 +23,10 @@ import java.util.List;
 import javax.ws.rs.core.Response;
 
 import org.apache.lens.api.LensConf;
-import org.apache.lens.api.LensException;
 import org.apache.lens.api.LensSessionHandle;
 import org.apache.lens.api.query.*;
+import org.apache.lens.server.api.error.LensException;
+import org.apache.lens.server.api.query.cost.QueryCost;
 
 /**
  * The Interface QueryExecutionService.
@@ -38,15 +39,32 @@ public interface QueryExecutionService {
   String NAME = "query";
 
   /**
+   * Estimate the cost of given query.
+   *
+   * @param requestId     the request Id of request used to start estimate operation
+   * @param sessionHandle the session handle
+   * @param query         The query should be in HiveQL(SQL like)
+   * @param conf          The query configuration
+   *
+   * @return The query cost
+   *
+   * @throws LensException thrown in case of failure
+   */
+  QueryCost estimate(final String requestId, LensSessionHandle sessionHandle, String query, LensConf conf)
+    throws LensException;
+
+  /**
    * Explain the given query.
    *
+   * @param requestId     the request Id of request used to start explain operation
    * @param sessionHandle the session handle
    * @param query         The query should be in HiveQL(SQL like)
    * @param conf          The query configuration
    * @return The query plan;
    * @throws LensException the lens exception
    */
-  QueryPlan explain(LensSessionHandle sessionHandle, String query, LensConf conf) throws LensException;
+  QueryPlan explain(final String requestId, LensSessionHandle sessionHandle, String query, LensConf conf)
+    throws LensException;
 
   /**
    * Prepare the query.
@@ -282,6 +300,13 @@ public interface QueryExecutionService {
    * @return running queries count
    */
   long getRunningQueriesCount();
+
+  /**
+   * Get waiting queries count
+   *
+   * @return waiting queries count
+   */
+  long getWaitingQueriesCount();
 
   /**
    * Get finished queries count

@@ -18,37 +18,39 @@
  */
 package org.apache.lens.cube.metadata;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.metadata.Table;
 
+import com.google.common.collect.Sets;
+
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public final class CubeDimensionTable extends AbstractCubeTable {
   private String dimName; // dimension name the dimtabe belongs to
   private final Map<String, UpdatePeriod> snapshotDumpPeriods = new HashMap<String, UpdatePeriod>();
 
   public CubeDimensionTable(String dimName, String dimTblName, List<FieldSchema> columns, double weight,
-      Map<String, UpdatePeriod> snapshotDumpPeriods) {
+    Map<String, UpdatePeriod> snapshotDumpPeriods) {
     this(dimName, dimTblName, columns, weight, snapshotDumpPeriods, new HashMap<String, String>());
   }
 
   public CubeDimensionTable(String dimName, String dimTblName, List<FieldSchema> columns, double weight,
-      Set<String> storages) {
+    Set<String> storages) {
     this(dimName, dimTblName, columns, weight, getSnapshotDumpPeriods(storages), new HashMap<String, String>());
   }
 
   public CubeDimensionTable(String dimName, String dimTblName, List<FieldSchema> columns, double weight,
-      Set<String> storages, Map<String, String> properties) {
+    Set<String> storages, Map<String, String> properties) {
     this(dimName, dimTblName, columns, weight, getSnapshotDumpPeriods(storages), properties);
   }
 
   public CubeDimensionTable(String dimName, String dimTblName, List<FieldSchema> columns, double weight,
-      Map<String, UpdatePeriod> snapshotDumpPeriods, Map<String, String> properties) {
+    Map<String, UpdatePeriod> snapshotDumpPeriods, Map<String, String> properties) {
     super(dimTblName, columns, properties, weight);
     this.dimName = dimName;
     if (snapshotDumpPeriods != null) {
@@ -56,6 +58,7 @@ public final class CubeDimensionTable extends AbstractCubeTable {
     }
     addProperties();
   }
+
 
   private static Map<String, UpdatePeriod> getSnapshotDumpPeriods(Set<String> storages) {
     Map<String, UpdatePeriod> snapshotDumpPeriods = new HashMap<String, UpdatePeriod>();
@@ -74,6 +77,19 @@ public final class CubeDimensionTable extends AbstractCubeTable {
     }
   }
 
+  public Set<String> getPartCols() {
+    Set<String> partCols = Sets.newHashSet();
+    String partColsStr = getProperties().get(MetastoreUtil.getDimTablePartsKey(getName()));
+    if (partColsStr != null) {
+      for (String s : StringUtils.split(partColsStr, ",")) {
+        if (!StringUtils.isBlank(s)) {
+          partCols.add(s);
+        }
+      }
+    }
+    return partCols;
+  }
+
   @Override
   public CubeTableType getTableType() {
     return CubeTableType.DIM_TABLE;
@@ -82,9 +98,10 @@ public final class CubeDimensionTable extends AbstractCubeTable {
   @Override
   protected void addProperties() {
     super.addProperties();
-    setDimName(getProperties(), getName(), dimName);
-    setSnapshotPeriods(getName(), getProperties(), snapshotDumpPeriods);
+    setDimName(getName(), getProperties(), dimName);
+    setSnapshotDumpPeriods(getName(), getProperties(), snapshotDumpPeriods);
   }
+
 
   public Map<String, UpdatePeriod> getSnapshotDumpPeriods() {
     return snapshotDumpPeriods;
@@ -94,8 +111,8 @@ public final class CubeDimensionTable extends AbstractCubeTable {
     return dimName;
   }
 
-  private static void setSnapshotPeriods(String name, Map<String, String> props,
-      Map<String, UpdatePeriod> snapshotDumpPeriods) {
+  private static void setSnapshotDumpPeriods(String name, Map<String, String> props,
+    Map<String, UpdatePeriod> snapshotDumpPeriods) {
     if (snapshotDumpPeriods != null) {
       props.put(MetastoreUtil.getDimensionStorageListKey(name), MetastoreUtil.getStr(snapshotDumpPeriods.keySet()));
       for (Map.Entry<String, UpdatePeriod> entry : snapshotDumpPeriods.entrySet()) {
@@ -106,7 +123,7 @@ public final class CubeDimensionTable extends AbstractCubeTable {
     }
   }
 
-  private static void setDimName(Map<String, String> props, String dimTblName, String dimName) {
+  private static void setDimName(String dimTblName, Map<String, String> props, String dimName) {
     props.put(MetastoreUtil.getDimNameKey(dimTblName), dimName);
   }
 
@@ -116,10 +133,9 @@ public final class CubeDimensionTable extends AbstractCubeTable {
 
   private static Map<String, UpdatePeriod> getDumpPeriods(String name, Map<String, String> params) {
     String storagesStr = params.get(MetastoreUtil.getDimensionStorageListKey(name));
-    if (storagesStr != null) {
+    if (!StringUtils.isBlank(storagesStr)) {
       Map<String, UpdatePeriod> dumpPeriods = new HashMap<String, UpdatePeriod>();
-      String[] storages = storagesStr.split(",");
-      for (String storage : storages) {
+      for (String storage : StringUtils.split(storagesStr, ",")) {
         String dumpPeriod = params.get(MetastoreUtil.getDimensionDumpPeriodKey(name, storage));
         if (dumpPeriod != null) {
           dumpPeriods.put(storage, UpdatePeriod.valueOf(dumpPeriod));
@@ -130,6 +146,11 @@ public final class CubeDimensionTable extends AbstractCubeTable {
       return dumpPeriods;
     }
     return null;
+  }
+
+  @Override
+  public int hashCode() {
+    return super.hashCode();
   }
 
   @Override
@@ -171,21 +192,19 @@ public final class CubeDimensionTable extends AbstractCubeTable {
 
   /**
    * Alter the dimension name that the table belongs to
-   * 
+   *
    * @param newDimName
    */
   public void alterUberDim(String newDimName) {
     this.dimName = newDimName;
-    setDimName(getProperties(), getName(), this.dimName);
+    setDimName(getName(), getProperties(), this.dimName);
   }
 
   /**
    * Alter snapshot dump period of a storage
-   * 
-   * @param storage
-   *          Storage name
-   * @param period
-   *          The new value
+   *
+   * @param storage Storage name
+   * @param period  The new value
    * @throws HiveException
    */
   public void alterSnapshotDumpPeriod(String storage, UpdatePeriod period) throws HiveException {
@@ -194,11 +213,11 @@ public final class CubeDimensionTable extends AbstractCubeTable {
     }
 
     if (snapshotDumpPeriods.containsKey(storage)) {
-      LOG.info("Updating dump period for " + storage + " from " + snapshotDumpPeriods.get(storage) + " to " + period);
+      log.info("Updating dump period for {} from {} to {}", storage, snapshotDumpPeriods.get(storage), period);
     }
 
     snapshotDumpPeriods.put(storage, period);
-    setSnapshotPeriods(getName(), getProperties(), snapshotDumpPeriods);
+    setSnapshotDumpPeriods(getName(), getProperties(), snapshotDumpPeriods);
   }
 
   @Override
@@ -213,6 +232,6 @@ public final class CubeDimensionTable extends AbstractCubeTable {
 
   void dropStorage(String storage) {
     snapshotDumpPeriods.remove(storage);
-    setSnapshotPeriods(getName(), getProperties(), snapshotDumpPeriods);
+    setSnapshotDumpPeriods(getName(), getProperties(), snapshotDumpPeriods);
   }
 }

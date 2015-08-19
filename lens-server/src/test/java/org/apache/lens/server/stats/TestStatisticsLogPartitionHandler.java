@@ -18,20 +18,7 @@
  */
 package org.apache.lens.server.stats;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hive.metastore.api.Database;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.ql.metadata.Hive;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
-import org.apache.hadoop.hive.ql.metadata.Partition;
-import org.apache.hadoop.hive.ql.metadata.Table;
-import org.apache.lens.server.api.LensConfConstants;
-import org.apache.lens.server.stats.event.query.QueryExecutionStatistics;
-import org.apache.lens.server.stats.store.log.PartitionEvent;
-import org.apache.lens.server.stats.store.log.StatisticsLogPartitionHandler;
-import org.testng.Assert;
-import org.testng.annotations.Test;
+import static org.testng.Assert.assertNotNull;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,7 +26,20 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Set;
 
-import static org.testng.Assert.assertNotNull;
+import org.apache.lens.server.LensServerConf;
+import org.apache.lens.server.api.LensConfConstants;
+import org.apache.lens.server.stats.event.query.QueryExecutionStatistics;
+import org.apache.lens.server.stats.store.log.PartitionEvent;
+import org.apache.lens.server.stats.store.log.StatisticsLogPartitionHandler;
+
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.api.Database;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.hadoop.hive.ql.metadata.*;
+
+import org.testng.Assert;
+import org.testng.annotations.Test;
 
 /**
  * The Class TestStatisticsLogPartitionHandler.
@@ -53,13 +53,12 @@ public class TestStatisticsLogPartitionHandler {
   /**
    * Test partition handler.
    *
-   * @throws Exception
-   *           the exception
+   * @throws Exception the exception
    */
   @Test
   public void testPartitionHandler() throws Exception {
-    Configuration conf = configureHiveTables();
-    String fileName = "/tmp/lensstats.log";
+    HiveConf conf = configureHiveTables();
+    String fileName = "target/lensstats.log";
     File f = createDummyFile(fileName);
     StatisticsLogPartitionHandler handler = new StatisticsLogPartitionHandler();
     handler.initialize(conf);
@@ -67,14 +66,18 @@ public class TestStatisticsLogPartitionHandler {
     partMap.put("random", f.getAbsolutePath());
     PartitionEvent event = new PartitionEvent(EVENT_NAME, partMap, null);
     handler.process(event);
-    Hive h = getHiveClient();
+    Hive h = getHiveClient(conf);
     Set<Partition> partitionSet = h.getAllPartitionsOf(getHiveTable());
     Assert.assertEquals(partitionSet.size(), 1);
     Partition p = partitionSet.iterator().next();
     Assert.assertEquals(p.getTable().getTableName(), EVENT_NAME);
     Assert.assertEquals(p.getTable().getDbName(), LensConfConstants.DEFAULT_STATISTICS_DATABASE);
-    Assert.assertEquals(p.getDataLocation(), new Path(LensConfConstants.DEFAULT_STATISTICS_WAREHOUSE, EVENT_NAME
-        + "/random/" + EVENT_NAME + ".log"));
+    Assert.assertEquals(p.getDataLocation(),
+      new Path(
+        conf.get(LensConfConstants.STATISTICS_WAREHOUSE_KEY, LensConfConstants.DEFAULT_STATISTICS_WAREHOUSE),
+        EVENT_NAME + "/random/" + EVENT_NAME + ".log"
+      )
+    );
     Assert.assertFalse(f.exists());
     h.dropTable(LensConfConstants.DEFAULT_STATISTICS_DATABASE, EVENT_NAME, true, true);
   }
@@ -82,16 +85,14 @@ public class TestStatisticsLogPartitionHandler {
   /**
    * Test query execution statistics table creation.
    *
-   * @throws Exception
-   *           the exception
+   * @throws Exception the exception
    */
   @Test
   public void testQueryExecutionStatisticsTableCreation() throws Exception {
     QueryExecutionStatistics stats = new QueryExecutionStatistics(System.currentTimeMillis());
-    Configuration conf = new Configuration();
-    conf.addResource("hive-site.xml");
+    HiveConf conf = LensServerConf.getHiveConf();
     Table t = stats.getHiveTable(conf);
-    Hive h = getHiveClient();
+    Hive h = getHiveClient(conf);
     h.createTable(t);
     Assert.assertNotNull(h.getTable(LensConfConstants.DEFAULT_STATISTICS_DATABASE, t.getTableName()));
     h.dropTable(LensConfConstants.DEFAULT_STATISTICS_DATABASE, t.getTableName(), true, true);
@@ -100,11 +101,9 @@ public class TestStatisticsLogPartitionHandler {
   /**
    * Creates the dummy file.
    *
-   * @param fileName
-   *          the file name
+   * @param fileName the file name
    * @return the file
-   * @throws IOException
-   *           Signals that an I/O exception has occurred.
+   * @throws IOException Signals that an I/O exception has occurred.
    */
   private File createDummyFile(String fileName) throws IOException {
     File f = new File(fileName);
@@ -117,17 +116,16 @@ public class TestStatisticsLogPartitionHandler {
    *
    * @return the configuration
    */
-  private Configuration configureHiveTables() {
+  private HiveConf configureHiveTables() {
     assertNotNull(System.getProperty("hadoop.bin.path"));
-    Configuration conf = new Configuration();
-    conf.addResource("hive-site.xml");
+    HiveConf conf = LensServerConf.getHiveConf();
     try {
-      Hive hive = getHiveClient();
+      Hive hive = getHiveClient(conf);
       Database database = new Database();
       database.setName(LensConfConstants.DEFAULT_STATISTICS_DATABASE);
       hive.dropTable(LensConfConstants.DEFAULT_STATISTICS_DATABASE, EVENT_NAME, true, true);
       hive.dropTable(LensConfConstants.DEFAULT_STATISTICS_DATABASE, QueryExecutionStatistics.class.getSimpleName(),
-          true, true);
+        true, true);
       hive.dropDatabase(LensConfConstants.DEFAULT_STATISTICS_DATABASE, true, true);
       hive.createDatabase(database);
       Table t = getHiveTable();
@@ -146,8 +144,8 @@ public class TestStatisticsLogPartitionHandler {
     return t;
   }
 
-  private Hive getHiveClient() throws HiveException {
-    return Hive.get();
+  private Hive getHiveClient(HiveConf conf) throws HiveException {
+    return Hive.get(conf);
   }
 
 }

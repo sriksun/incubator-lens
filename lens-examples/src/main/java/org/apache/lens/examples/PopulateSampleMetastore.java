@@ -19,11 +19,17 @@
 package org.apache.lens.examples;
 
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 import javax.xml.bind.JAXBException;
 
 import org.apache.lens.api.APIResult;
 import org.apache.lens.api.metastore.XPartition;
+import org.apache.lens.api.metastore.XPartitionList;
 import org.apache.lens.client.LensClientSingletonWrapper;
 import org.apache.lens.client.LensMetadataClient;
 
@@ -33,12 +39,22 @@ public class PopulateSampleMetastore {
   private APIResult result;
   private int retCode = 0;
 
+  private static final Date DATE = new Date(System.currentTimeMillis());
+  private static final SimpleDateFormat FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+  private static final String NOW_TIME = FORMAT.format(DATE);
+
+  private static final String INSERT_QUERY = "INSERT INTO "
+      + "mydb_sales_aggr_continuous_fact (order_time, delivery_time, customer_id, "
+      + "product_id, promotion_id, customer_city_id, production_city_id, delivery_city_id, unit_sales, "
+      + "store_sales, store_cost, max_line_item_price, max_line_item_discount) values "
+      + "('" + NOW_TIME + "','" + NOW_TIME + "',2,2,1,2,2,2,1,8,2,10,2)";
+
   public PopulateSampleMetastore() throws JAXBException {
-    metaClient = new LensMetadataClient(LensClientSingletonWrapper.INSTANCE.getClient().getConnection());
+    metaClient = new LensMetadataClient(LensClientSingletonWrapper.instance().getClient().getConnection());
   }
 
   public void close() {
-    LensClientSingletonWrapper.INSTANCE.getClient().closeConnection();
+    LensClientSingletonWrapper.instance().getClient().closeConnection();
   }
 
   public static void main(String[] args) throws Exception {
@@ -57,60 +73,74 @@ public class PopulateSampleMetastore {
       if (populate != null) {
         populate.close();
       }
-
+    }
+    if (populate.retCode != 0) {
+      System.exit(populate.retCode);
     }
   }
 
-  public void populateAll() throws JAXBException, IOException {
+  public void populateAll() throws Exception {
     populateDimTables();
     populateFactTables();
   }
 
   public void populateDimTables() throws JAXBException, IOException {
-    XPartition partition = (XPartition) SampleMetastore.readFromXML("dim1-local-part.xml");
+    createDimTablePartition("dim1-local-part.xml", "dim_table", "local");
+    createDimTablePartition("dim2-local-part.xml", "dim_table2", "local");
+    createDimTablePartition("dim4-local-part.xml", "dim_table4", "local");
+    createDimTablePartitions("product-local-parts.xml", "product_table", "local");
+    createDimTablePartition("city-local-part.xml", "city_table", "local");
+    createDimTablePartition("customer-local-part.xml", "customer_table", "local");
+  }
+
+  private void createDimTablePartition(String fileName, String dimTable, String storage)
+    throws JAXBException, IOException {
+    XPartition partition = (XPartition) SampleMetastore.readFromXML(fileName);
     String partLocation = partition.getLocation();
     if (!partLocation.startsWith("/")) {
       partition.setLocation("file://" + System.getProperty("lens.home") + "/" + partLocation);
     }
-    result = metaClient.addPartitionToDimensionTable("dim_table", "local", partition);
+    result = metaClient.addPartitionToDimensionTable(dimTable, storage, partition);
     if (result.getStatus().equals(APIResult.Status.FAILED)) {
-      System.out.println("Adding partition from:dim1-local-part.xml failed");
+      System.err.println("Adding partition from:"+ fileName + " failed");
       retCode = 1;
     } else {
-      System.out.println("Added partition from:dim1-local-part.xml");
+      System.out.println("Added partition from:" + fileName);
     }
-    partition = (XPartition) SampleMetastore.readFromXML("dim2-local-part.xml");
-    partLocation = partition.getLocation();
-    if (!partLocation.startsWith("/")) {
-      partition.setLocation("file://" + System.getProperty("lens.home") + "/" + partLocation);
-    }
-    result = metaClient.addPartitionToDimensionTable("dim_table2", "local", partition);
-    if (result.getStatus().equals(APIResult.Status.FAILED)) {
-      System.out.println("Adding partition from:dim2-local-part.xml failed");
-      retCode = 1;
-    } else {
-      System.out.println("Added partition from:dim2-local-part.xml");
-    }
+  }
 
-    partition = (XPartition) SampleMetastore.readFromXML("dim4-local-part.xml");
-    partLocation = partition.getLocation();
-    if (!partLocation.startsWith("/")) {
-      partition.setLocation("file://" + System.getProperty("lens.home") + "/" + partLocation);
-    }
-    result = metaClient.addPartitionToDimensionTable("dim_table4", "local", partition);
-    if (result.getStatus().equals(APIResult.Status.FAILED)) {
-      System.out.println("Adding partition from:dim4-local-part.xml failed");
-      retCode = 1;
-    } else {
-      System.out.println("Added partition from:dim4-local-part.xml");
-    }
+  private void createContinuousFactData() throws Exception {
+    Class.forName("org.hsqldb.jdbcDriver");
+    Connection con = DriverManager.getConnection(
+        "jdbc:hsqldb:/tmp/db-storage.db", "SA", "");
 
+    con.setAutoCommit(true);
+    Statement statement = con.createStatement();
     try {
-      DatabaseUtil.initalizeDatabaseStorage();
-      System.out.println("Created DB storages for dim_table3 and dim_table4");
-    } catch (Exception e) {
-      e.printStackTrace();
-      System.out.println("Creating DB storage failed for dim_table3 and dim_table4");
+      statement.execute(INSERT_QUERY);
+
+    } finally {
+      statement.close();
+      con.close();
+    }
+
+  }
+
+  private void createDimTablePartitions(String fileName, String dimTable, String storage)
+    throws JAXBException, IOException {
+    XPartitionList partitionList = (XPartitionList) SampleMetastore.readFromXML(fileName);
+    for (XPartition partition : partitionList.getPartition()) {
+      String partLocation = partition.getLocation();
+      if (!partLocation.startsWith("/")) {
+        partition.setLocation("file://" + System.getProperty("lens.home") + "/" + partLocation);
+      }
+    }
+    result = metaClient.addPartitionsToDimensionTable(dimTable, storage, partitionList);
+    if (result.getStatus().equals(APIResult.Status.FAILED)) {
+      System.err.println("Adding partitions from:" + fileName + " failed");
+      retCode = 1;
+    } else {
+      System.out.println("Added partitions from:" + fileName);
     }
   }
 
@@ -122,14 +152,31 @@ public class PopulateSampleMetastore {
     }
     result = metaClient.addPartitionToFactTable(fact, storage, partition);
     if (result.getStatus().equals(APIResult.Status.FAILED)) {
-      System.out.println("Adding partition from:" + fileName + " failed");
+      System.err.println("Adding partition from:" + fileName + " failed");
       retCode = 1;
     } else {
       System.out.println("Added partition from:" + fileName);
     }
   }
 
-  public void populateFactTables() throws JAXBException, IOException {
+  private void createFactPartitions(String fileName, String fact, String storage) throws JAXBException, IOException {
+    XPartitionList partitionList = (XPartitionList) SampleMetastore.readFromXML(fileName);
+    for (XPartition partition : partitionList.getPartition()) {
+      String partLocation = partition.getLocation();
+      if (!partLocation.startsWith("/")) {
+        partition.setLocation("file://" + System.getProperty("lens.home") + "/" + partLocation);
+      }
+    }
+    result = metaClient.addPartitionsToFactTable(fact, storage, partitionList);
+    if (result.getStatus().equals(APIResult.Status.FAILED)) {
+      System.err.println("Adding partitions from:" + fileName + " failed");
+      retCode = 1;
+    } else {
+      System.out.println("Added partitions from:" + fileName);
+    }
+  }
+
+  public void populateFactTables() throws Exception {
     createFactPartition("fact1-local-part1.xml", "fact1", "local");
     createFactPartition("fact1-local-part2.xml", "fact1", "local");
     createFactPartition("fact1-local-part3.xml", "fact1", "local");
@@ -142,6 +189,11 @@ public class PopulateSampleMetastore {
     createFactPartition("raw-local-part4.xml", "rawfact", "local");
     createFactPartition("raw-local-part5.xml", "rawfact", "local");
     createFactPartition("raw-local-part6.xml", "rawfact", "local");
+    createFactPartitions("sales-raw-local-parts.xml", "sales_raw_fact", "local");
+    createFactPartitions("sales-aggr-fact1-local-parts.xml", "sales_aggr_fact1", "local");
+    createFactPartitions("sales-aggr-fact2-local-parts.xml", "sales_aggr_fact2", "local");
+    createFactPartitions("sales-aggr-fact1-mydb-parts.xml", "sales_aggr_fact1", "mydb");
+    createFactPartitions("sales-aggr-fact2-mydb-parts.xml", "sales_aggr_fact2", "mydb");
+    createContinuousFactData();
   }
-
 }

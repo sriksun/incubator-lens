@@ -18,10 +18,16 @@
  */
 package org.apache.lens.server.api.driver;
 
-import org.apache.lens.api.LensException;
+import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.query.AbstractQueryContext;
+import org.apache.lens.server.api.query.cost.QueryCost;
 
 public class MockFailDriver extends MockDriver {
+
+  @Override
+  public QueryCost estimate(AbstractQueryContext qctx) throws LensException {
+    throw new LensException("failing!");
+  }
 
   /*
    * (non-Javadoc)

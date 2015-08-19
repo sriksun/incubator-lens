@@ -47,4 +47,14 @@ public class LensBanner extends DefaultBannerProvider {
   public String getWelcomeMessage() {
     return "Welcome to Lens Client";
   }
+
+  @Override
+  public String getVersion() {
+    return getClass().getPackage().getImplementationVersion();
+  }
+
+  @Override
+  public String getProviderName() {
+    return "Lens CLI";
+  }
 }

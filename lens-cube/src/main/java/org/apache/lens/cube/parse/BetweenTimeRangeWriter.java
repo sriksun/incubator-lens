@@ -22,18 +22,19 @@ import java.util.Iterator;
 import java.util.Set;
 import java.util.TreeSet;
 
-import org.apache.hadoop.hive.ql.ErrorMsg;
-import org.apache.hadoop.hive.ql.parse.SemanticException;
+import org.apache.lens.cube.error.LensCubeErrorCode;
+import org.apache.lens.cube.metadata.FactPartition;
+import org.apache.lens.server.api.error.LensException;
+
 
 /**
  * Writes partitions queried in timerange as between clause.
- * 
  */
 public class BetweenTimeRangeWriter implements TimeRangeWriter {
 
   @Override
   public String getTimeRangeWhereClause(CubeQueryContext cubeQueryContext, String tableName,
-      Set<FactPartition> rangeParts) throws SemanticException {
+    Set<FactPartition> rangeParts) throws LensException {
     if (rangeParts.size() == 0) {
       return "";
     }
@@ -41,7 +42,7 @@ public class BetweenTimeRangeWriter implements TimeRangeWriter {
     if (rangeParts.size() == 1) {
       partStr.append("(");
       String partFilter =
-          TimeRangeUtils.getTimeRangePartitionFilter(rangeParts.iterator().next(), cubeQueryContext, tableName);
+        TimeRangeUtils.getTimeRangePartitionFilter(rangeParts.iterator().next(), cubeQueryContext, tableName);
       partStr.append(partFilter);
       partStr.append(")");
     } else {
@@ -51,19 +52,20 @@ public class BetweenTimeRangeWriter implements TimeRangeWriter {
       while (it.hasNext()) {
         FactPartition part = it.next();
         if (part.hasContainingPart()) {
-          throw new SemanticException(ErrorMsg.CANNOT_USE_TIMERANGE_WRITER, "Partition has containing part");
+          throw new LensException(LensCubeErrorCode.CANNOT_USE_TIMERANGE_WRITER.getValue(),
+              "Partition has containing part");
         }
         if (first == null) {
           first = part;
         } else {
           // validate partcol, update period are same for both
           if (!first.getPartCol().equalsIgnoreCase(part.getPartCol())) {
-            throw new SemanticException(ErrorMsg.CANNOT_USE_TIMERANGE_WRITER,
-                "Part columns are different in partitions");
+            throw new LensException(LensCubeErrorCode.CANNOT_USE_TIMERANGE_WRITER.getValue(),
+              "Part columns are different in partitions");
           }
           if (!first.getPeriod().equals(part.getPeriod())) {
-            throw new SemanticException(ErrorMsg.CANNOT_USE_TIMERANGE_WRITER,
-                "Partitions are in different update periods");
+            throw new LensException(LensCubeErrorCode.CANNOT_USE_TIMERANGE_WRITER.getValue(),
+              "Partitions are in different update periods");
           }
         }
         parts.add(part);
@@ -78,7 +80,7 @@ public class BetweenTimeRangeWriter implements TimeRangeWriter {
       }
 
       partStr.append(" (").append(tableName).append(".").append(partCol).append(" BETWEEN '")
-          .append(start.getFormattedPartSpec()).append("' AND '").append(end.getFormattedPartSpec()).append("') ");
+        .append(start.getFormattedPartSpec()).append("' AND '").append(end.getFormattedPartSpec()).append("') ");
     }
     return partStr.toString();
   }

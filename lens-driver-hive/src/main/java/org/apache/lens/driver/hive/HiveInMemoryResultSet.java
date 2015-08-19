@@ -23,16 +23,19 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
-import org.apache.lens.api.LensException;
 import org.apache.lens.api.query.ResultRow;
 import org.apache.lens.server.api.driver.InMemoryResultSet;
 import org.apache.lens.server.api.driver.LensResultSetMetadata;
+import org.apache.lens.server.api.error.LensException;
 
 import org.apache.hive.service.cli.*;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * The Class HiveInMemoryResultSet.
  */
+@Slf4j
 public class HiveInMemoryResultSet extends InMemoryResultSet {
 
   /** The client. */
@@ -61,6 +64,7 @@ public class HiveInMemoryResultSet extends InMemoryResultSet {
 
   /** The num columns. */
   int numColumns;
+  private FetchOrientation orientation;
 
   /**
    * Instantiates a new hive in memory result set.
@@ -77,6 +81,7 @@ public class HiveInMemoryResultSet extends InMemoryResultSet {
     this.closeAfterFecth = closeAfterFecth;
     this.metadata = client.getResultSetMetadata(opHandle);
     this.numColumns = metadata.getColumnDescriptors().size();
+    this.seekToStart();
   }
 
   /*
@@ -85,8 +90,8 @@ public class HiveInMemoryResultSet extends InMemoryResultSet {
    * @see org.apache.lens.server.api.driver.LensResultSet#size()
    */
   @Override
-  public int size() throws LensException {
-    return -1;
+  public Integer size() throws LensException {
+    return null;
   }
 
   @Override
@@ -98,20 +103,27 @@ public class HiveInMemoryResultSet extends InMemoryResultSet {
     return hrsMeta;
   }
 
+  @Override
+  public boolean seekToStart() {
+    orientation = FetchOrientation.FETCH_FIRST;
+    return true;
+  }
+
   /*
-   * (non-Javadoc)
-   *
-   * @see org.apache.lens.server.api.driver.InMemoryResultSet#hasNext()
-   */
+     * (non-Javadoc)
+     *
+     * @see org.apache.lens.server.api.driver.InMemoryResultSet#hasNext()
+     */
   @Override
   public boolean hasNext() throws LensException {
     if (fetchedRowsItr == null || !fetchedRowsItr.hasNext()) {
       try {
-        rowSet = client.fetchResults(opHandle, FetchOrientation.FETCH_NEXT, fetchSize);
+        rowSet = client.fetchResults(opHandle, orientation, fetchSize);
+        orientation = FetchOrientation.FETCH_NEXT;
         noMoreResults = rowSet.numRows() == 0;
         if (noMoreResults) {
           if (closeAfterFecth) {
-            HiveDriver.LOG.info("No more results closing the query");
+            log.info("No more results closing the query");
             client.closeOperation(opHandle);
           }
           return false;

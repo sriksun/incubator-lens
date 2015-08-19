@@ -20,19 +20,22 @@ package org.apache.lens.client;
 
 import org.apache.lens.client.exceptions.LensClientServerConnectionException;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * The Enum LensClientSingletonWrapper.
  */
-public enum LensClientSingletonWrapper {
+@Slf4j
+public class LensClientSingletonWrapper {
 
   /** The instance. */
-  INSTANCE;
+  public static class InstanceHolder {
+    public static final LensClientSingletonWrapper INSTANCE = new LensClientSingletonWrapper();
+  }
 
-  /** The log. */
-  private static final Log LOG = LogFactory.getLog(LensClientSingletonWrapper.class);
+  public static LensClientSingletonWrapper instance() {
+    return InstanceHolder.INSTANCE;
+  }
 
   /** The client. */
   private LensClient client;
@@ -44,26 +47,6 @@ public enum LensClientSingletonWrapper {
    * Instantiates a new lens client singleton wrapper.
    */
   LensClientSingletonWrapper() {
-    try {
-      client = new LensClient();
-    } catch (LensClientServerConnectionException e) {
-      if (e.getErrorCode() != 401) {
-        explainFailedAttempt(e);
-        throw e;
-      }
-      // Connecting without password prompt failed.
-      for (int i = 0; i < MAX_RETRIES; i++) {
-        try {
-          client = new LensClient(Credentials.prompt());
-          break;
-        } catch (LensClientServerConnectionException lensClientServerConnectionException) {
-          explainFailedAttempt(lensClientServerConnectionException);
-          if (i == MAX_RETRIES - 1) {
-            throw lensClientServerConnectionException;
-          }
-        }
-      }
-    }
   }
 
   /**
@@ -72,7 +55,7 @@ public enum LensClientSingletonWrapper {
    * @param e the e
    */
   public void explainFailedAttempt(LensClientServerConnectionException e) {
-    LOG.error("failed login attempt", e);
+    log.error("failed login attempt", e);
     switch (e.getErrorCode()) {
     case 401:
       System.console().printf("username/password combination incorrect.\n");
@@ -81,11 +64,33 @@ public enum LensClientSingletonWrapper {
       System.console().printf("server unresponsive, Returned error code 500\n");
       break;
     default:
-      System.console().printf("Unknown error in authenticating with the server. Error code = %d\n", e.getErrorCode());
+      System.console().printf("ERROR: " + e.getMessage() + "\n");
     }
   }
 
   public LensClient getClient() {
+    if (client == null) {
+      try {
+        client = new LensClient();
+      } catch (LensClientServerConnectionException e) {
+        if (e.getErrorCode() != 401) {
+          explainFailedAttempt(e);
+          throw e;
+        }
+        // Connecting without password prompt failed.
+        for (int i = 0; i < MAX_RETRIES; i++) {
+          try {
+            client = new LensClient(Credentials.prompt());
+            break;
+          } catch (LensClientServerConnectionException lensClientServerConnectionException) {
+            explainFailedAttempt(lensClientServerConnectionException);
+            if (i == MAX_RETRIES - 1) {
+              throw lensClientServerConnectionException;
+            }
+          }
+        }
+      }
+    }
     return client;
   }
 

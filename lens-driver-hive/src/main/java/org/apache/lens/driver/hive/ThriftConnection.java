@@ -20,7 +20,7 @@ package org.apache.lens.driver.hive;
 
 import java.io.Closeable;
 
-import org.apache.lens.api.LensException;
+import org.apache.lens.server.api.error.LensException;
 
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hive.service.cli.CLIServiceClient;
@@ -33,9 +33,16 @@ public interface ThriftConnection extends Closeable {
   /**
    * Gets the client.
    *
-   * @param conf the conf
    * @return the client
    * @throws LensException the lens exception
    */
-  CLIServiceClient getClient(HiveConf conf) throws LensException;
+  CLIServiceClient getClient() throws LensException;
+
+  /**
+   * Initializes connection with conf.
+   *
+   * @param conf
+   * @param user
+   */
+  void init(HiveConf conf, String user);
 }

@@ -18,9 +18,9 @@
  */
 package org.apache.lens.driver.hive;
 
-import org.apache.lens.api.LensException;
 import org.apache.lens.server.api.driver.LensResultSetMetadata;
 import org.apache.lens.server.api.driver.PersistentResultSet;
+import org.apache.lens.server.api.error.LensException;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hive.service.cli.CLIServiceClient;
@@ -59,8 +59,13 @@ public class HivePersistentResultSet extends PersistentResultSet {
    * @see org.apache.lens.server.api.driver.LensResultSet#size()
    */
   @Override
-  public int size() throws LensException {
-    return -1;
+  public Integer size() throws LensException {
+    return null;
+  }
+
+  @Override
+  public Long fileSize() throws LensException {
+    return null;
   }
 
   @Override

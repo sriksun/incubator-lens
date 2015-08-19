@@ -21,17 +21,21 @@ package org.apache.lens.server.api.metastore;
 import java.util.Date;
 import java.util.List;
 
-import org.apache.lens.api.LensException;
 import org.apache.lens.api.LensSessionHandle;
 import org.apache.lens.api.metastore.*;
+import org.apache.lens.server.api.LensService;
+import org.apache.lens.server.api.error.LensException;
 
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 
 /**
  * Server api for OLAP Cube Metastore.
- *
  */
-public interface CubeMetastoreService {
+public interface CubeMetastoreService extends LensService {
+
+  /** The constant NAME */
+  String NAME = "metastore";
+
   /**
    * Get current database used by the CubeMetastoreClient
    *
@@ -149,7 +153,7 @@ public interface CubeMetastoreService {
    *
    * @param sessionid session id
    * @param name      The table name
-   * @return {@link NativeTable} object
+   * @return {@link XNativeTable} object
    * @throws LensException
    */
   XNativeTable getNativeTable(LensSessionHandle sessionid, String name) throws LensException;
@@ -234,7 +238,6 @@ public interface CubeMetastoreService {
    *
    * @param sessionid The sessionid
    * @param xDimTable The dim table definition
-   *
    * @throws LensException
    */
   void createDimensionTable(LensSessionHandle sessionid, XDimensionTable xDimTable)
@@ -254,16 +257,15 @@ public interface CubeMetastoreService {
    * Get the dimension table from metastore
    *
    * @param dimTblName
-   * @return The {@link DimensionTable}
+   * @return The {@link XDimensionTable}
    */
   XDimensionTable getDimensionTable(LensSessionHandle sessionid, String dimTblName) throws LensException;
 
   /**
    * Update/Alter the dimension table
    *
-   * @param sessionid The sessionid
+   * @param sessionid      The sessionid
    * @param dimensionTable The new definition of dimension table
-   *
    * @throws LensException
    */
   void updateDimensionTable(LensSessionHandle sessionid, XDimensionTable dimensionTable) throws LensException;
@@ -271,9 +273,8 @@ public interface CubeMetastoreService {
   /**
    * Get all storages of dimension table
    *
-   * @param sessionid The sessionid
+   * @param sessionid  The sessionid
    * @param dimTblName The dimension table name
-   *
    * @return list of storage names
    * @throws LensException
    */
@@ -282,10 +283,9 @@ public interface CubeMetastoreService {
   /**
    * Add a storage to dimension table
    *
-   * @param sessionid The sessionid
-   * @param dimTblName The dimension table name
+   * @param sessionid    The sessionid
+   * @param dimTblName   The dimension table name
    * @param storageTable XStorageTableElement with storage name, table desc and dump period, if any.
-   *
    * @throws LensException
    */
   void addDimTableStorage(LensSessionHandle sessionid, String dimTblName, XStorageTableElement storageTable)
@@ -294,9 +294,8 @@ public interface CubeMetastoreService {
   /**
    * Drop all storages of dimension table. Will drop underlying tables as well.
    *
-   * @param sessionid The sessionid
+   * @param sessionid  The sessionid
    * @param dimTblName The dimension table name
-   *
    * @throws LensException
    */
   void dropAllStoragesOfDimTable(LensSessionHandle sessionid, String dimTblName) throws LensException;
@@ -304,8 +303,8 @@ public interface CubeMetastoreService {
   /**
    * Get storage table element associated with dimension table for storage name specified
    *
-   * @param sessionid The sessionid
-   * @param dimTblName The dimension table name
+   * @param sessionid   The sessionid
+   * @param dimTblName  The dimension table name
    * @param storageName The storage name
    * @return {@link XStorageTableElement}
    * @throws LensException
@@ -316,64 +315,69 @@ public interface CubeMetastoreService {
   /**
    * Drop storage of dimension table specified by name.
    *
-   * @param sessionid The sessionid
+   * @param sessionid  The sessionid
    * @param dimTblName The dimension table name
-   * @param storageName The storage name
+   * @param storage    The storage name
    * @throws LensException
    */
   void dropStorageOfDimTable(LensSessionHandle sessionid, String dimTblName, String storage) throws LensException;
 
   /**
-   * Get all dimension tables
+   * Get all dimension tables. dimensionName is an optional filter of dimension name.
+   * If provided, only the dimension tables belonging to given dimension will be returned
    *
    * @param sessionid
+   * @param dimensionName dimension name to be filtered with. Optional
    * @return
    * @throws LensException
    */
-  List<String> getAllDimTableNames(LensSessionHandle sessionid) throws LensException;
+  List<String> getAllDimTableNames(LensSessionHandle sessionid, String dimensionName) throws LensException;
 
   /**
    * Get all partitions of a dimension table in a storage
    *
-   * @param sessionid The sessionid
-   * @param dimTblName The dimension table name
-   * @param storageName The storage name
-   * @param filter The filter for the list of partitions
+   * @param sessionid  The sessionid
+   * @param dimension The dimension table name
+   * @param storageName    The storage name
+   * @param filter     The filter for the list of partitions
    * @return list of {@link XPartition}
    * @throws LensException
    */
-  List<XPartition> getAllPartitionsOfDimTableStorage(LensSessionHandle sessionid, String dimTblName,
-    String storage, String filter) throws LensException;
+  XPartitionList getAllPartitionsOfDimTableStorage(LensSessionHandle sessionid, String dimension,
+    String storageName, String filter) throws LensException;
 
   /**
    * Add partition to dimension table on a storage.
    *
-   * @param sessionid The sessionid
-   * @param dimTblName The dimension table name
+   * @param sessionid   The sessionid
+   * @param dimTblName  The dimension table name
    * @param storageName The storage name
-   * @param partition {@link XPartition}
+   * @param partition   {@link XPartition}
    * @throws LensException
+   * @return number of partitions added. Either 0 or 1
    */
-  void addPartitionToDimStorage(LensSessionHandle sessionid, String dimTblName, String storageName,
+  int addPartitionToDimStorage(LensSessionHandle sessionid, String dimTblName, String storageName,
     XPartition partition) throws LensException;
 
   /**
-   * Get all facts of cube. Cube can also be a derived cube
+   * Add partitions to dimension table on a storage.
    *
-   * @param sessionid The session id
-   * @param cubeName  The cube name
-   * @return List of FactTable objects
+   * @param sessionid   The sessionid
+   * @param dimTblName  The dimension table name
+   * @param storageName The storage name
+   * @param partitions  {@link XPartitionList}
    * @throws LensException
+   * @return Number of partitions added
    */
-  List<XFactTable> getAllFactsOfCube(LensSessionHandle sessionid, String cubeName) throws LensException;
+  int addPartitionsToDimStorage(LensSessionHandle sessionid, String dimTblName, String storageName,
+    XPartitionList partitions) throws LensException;
 
   /**
    * Get fact table given by name
    *
    * @param sessionid The sessionid
-   * @param fact The fact table name
-   *
-   * @return {@link FactTable}
+   * @param fact      The fact table name
+   * @return {@link XFactTable}
    * @throws LensException
    */
   XFactTable getFactTable(LensSessionHandle sessionid, String fact) throws LensException;
@@ -382,8 +386,7 @@ public interface CubeMetastoreService {
    * Create fact table
    *
    * @param sessionid The sessionid
-   * @param fact The fact table definition
-   *
+   * @param fact      The fact table definition
    * @throws LensException
    */
   void createFactTable(LensSessionHandle sessionid, XFactTable fact) throws LensException;
@@ -392,8 +395,7 @@ public interface CubeMetastoreService {
    * Update/Alter fact table
    *
    * @param sessionid The sessionid
-   * @param fact The fact table's new definition
-   *
+   * @param fact      The fact table's new definition
    * @throws LensException
    */
   void updateFactTable(LensSessionHandle sessionid, XFactTable fact) throws LensException;
@@ -402,9 +404,8 @@ public interface CubeMetastoreService {
    * Drop fact table.
    *
    * @param sessionid The sessionid
-   * @param fact The fact table name
-   * @param cascade If true, underlying storage tables will also be dropped.
-   *
+   * @param fact      The fact table name
+   * @param cascade   If true, underlying storage tables will also be dropped.
    * @throws LensException
    */
   void dropFactTable(LensSessionHandle sessionid, String fact, boolean cascade) throws LensException;
@@ -413,18 +414,17 @@ public interface CubeMetastoreService {
    * Get all fact names
    *
    * @param sessionid The sessionid
+   * @param cubeName optional filter filter facts by cube name.
    * @return List of fact table names
-   *
    * @throws LensException
    */
-  List<String> getAllFactNames(LensSessionHandle sessionid) throws LensException;
+  List<String> getAllFactNames(LensSessionHandle sessionid, String cubeName) throws LensException;
 
   /**
    * Get all storages of fact
    *
    * @param sessionid The sessionid
-   * @param fact The fact table name
-   *
+   * @param fact      The fact table name
    * @return List of all storage names on which fact is present
    * @throws LensException
    */
@@ -434,8 +434,7 @@ public interface CubeMetastoreService {
    * Drop all storages of fact
    *
    * @param sessionid The sessionid
-   * @param fact The fact table name
-   *
+   * @param factName  The fact table name
    * @throws LensException
    */
   void dropAllStoragesOfFact(LensSessionHandle sessionid, String factName) throws LensException;
@@ -443,8 +442,8 @@ public interface CubeMetastoreService {
   /**
    * Get storage table of fact specifed by fact name, storage name
    *
-   * @param sessionid The sessionid
-   * @param fact The fact table name
+   * @param sessionid   The sessionid
+   * @param fact        The fact table name
    * @param storageName The storage name
    * @return
    * @throws LensException
@@ -455,8 +454,8 @@ public interface CubeMetastoreService {
   /**
    * Add storage to fact table
    *
-   * @param sessionid The sessionid
-   * @param fact The fact table name
+   * @param sessionid    The sessionid
+   * @param fact         The fact table name
    * @param storageTable XStorageTableElement containing storage name, update periods and table description
    * @throws LensException
    */
@@ -467,9 +466,8 @@ public interface CubeMetastoreService {
    * Drop storage of fact specified by fact name, storage name
    *
    * @param sessionid The sessionid
-   * @param fact The fact table name
-   * @param storageName The storage name
-   *
+   * @param fact      The fact table name
+   * @param storage   The storage name
    * @throws LensException
    */
   void dropStorageOfFact(LensSessionHandle sessionid, String fact, String storage) throws LensException;
@@ -478,37 +476,48 @@ public interface CubeMetastoreService {
    * Get all partitions of fact on a storage
    *
    * @param sessionid The sessionid
-   * @param fact The fact table name
-   * @param storageName The storage name
-   * @param filter The filter for partition listing
-   *
+   * @param fact      The fact table name
+   * @param storageName   The storage name
+   * @param filter    The filter for partition listing
    * @return List of {@link XPartition}
    * @throws LensException
    */
-  List<XPartition> getAllPartitionsOfFactStorage(LensSessionHandle sessionid, String fact,
-    String storage, String filter) throws LensException;
+  XPartitionList getAllPartitionsOfFactStorage(LensSessionHandle sessionid, String fact,
+    String storageName, String filter) throws LensException;
 
   /**
    * Add partition to fact on a storage
    *
-   * @param sessionid The sessionid
-   * @param fact The fact table name
+   * @param sessionid   The sessionid
+   * @param fact        The fact table name
    * @param storageName The storage name
-   * @param partition {@link XPartition}
-   *
+   * @param partition   {@link XPartition}
    * @throws LensException
+   * @return number of partitions added. Either 0 or 1
    */
-  void addPartitionToFactStorage(LensSessionHandle sessionid, String fact, String storageName, XPartition partition)
-    throws LensException;
+  int addPartitionToFactStorage(LensSessionHandle sessionid, String fact, String storageName,
+    XPartition partition) throws LensException;
+
+  /**
+   * Add partitions to fact on a storage
+   *
+   * @param sessionid   The sessionid
+   * @param fact        The fact table name
+   * @param storageName The storage name
+   * @param partitions  {@link XPartitionList}
+   * @throws LensException
+   * @return Number of partitions added
+   */
+  int addPartitionsToFactStorage(LensSessionHandle sessionid, String fact, String storageName,
+    XPartitionList partitions) throws LensException;
 
   /**
    * Drop partition from storage with spec specified as comma separated string
    *
-   * @param sessionid The sessionid
+   * @param sessionid     The sessionid
    * @param cubeTableName The cube table name - fact/dimension table name
-   * @param storageName The storage name
-   * @param values The comma separated values for all partition columns
-   *
+   * @param storageName   The storage name
+   * @param values        The comma separated values for all partition columns
    * @throws LensException
    */
   void dropPartitionFromStorageByValues(LensSessionHandle sessionid,
@@ -517,11 +526,10 @@ public interface CubeMetastoreService {
   /**
    * Drop partition from storage with spec specified by filter
    *
-   * @param sessionid The sessionid
+   * @param sessionid     The sessionid
    * @param cubeTableName The cube table name - fact/dimension table name
-   * @param storageName The storage name
-   * @param filter The partition filter - all partitions which obey the filter will be dropped
-   *
+   * @param storageName   The storage name
+   * @param filter        The partition filter - all partitions which obey the filter will be dropped
    * @throws LensException
    */
   void dropPartitionFromStorageByFilter(LensSessionHandle sessionid,
@@ -530,13 +538,14 @@ public interface CubeMetastoreService {
   /**
    * Get flattened columns - all columns of table + all reachable columns
    *
-   * @param sessionid The sessionid
-   * @param tableName The table name - cube name or dimension name
-   *
-   * @return {@link FlattenedColumns}
+   * @param sessionHandle The session handle
+   * @param tableName     The table name - cube name or dimension name
+   * @param addChains
+   * @return {@link XFlattenedColumns}
    * @throws LensException
    */
-  XFlattenedColumns getFlattenedColumns(LensSessionHandle sessionHandle, String tableName) throws LensException;
+  XFlattenedColumns getFlattenedColumns(LensSessionHandle sessionHandle, String tableName, boolean addChains)
+    throws LensException;
 
   /**
    * Get the latest available date upto which data is available for the base cubes, for the time dimension
@@ -544,10 +553,21 @@ public interface CubeMetastoreService {
    * @param sessionid     The session id
    * @param timeDimension time dimension name
    * @param cubeName      The base cube name
-   *
    * @return Date
-   * @throws LensException,HiveException
+   * @throws LensException
+   * @throws HiveException
    */
   Date getLatestDateOfCube(LensSessionHandle sessionid, String cubeName, String timeDimension)
     throws LensException, HiveException;
+
+  List<String> getPartitionTimelines(LensSessionHandle sessionid, String factName, String storage,
+    String updatePeriod, String timeDimension) throws LensException, HiveException;
+
+  XJoinChains getAllJoinChains(LensSessionHandle sessionid, String table) throws LensException;
+
+  void updatePartition(LensSessionHandle sessionid, String tblName, String storageName,
+    XPartition partition) throws LensException;
+
+  void updatePartitions(LensSessionHandle sessionid, String tblName, String storageName,
+    XPartitionList partitions) throws LensException;
 }

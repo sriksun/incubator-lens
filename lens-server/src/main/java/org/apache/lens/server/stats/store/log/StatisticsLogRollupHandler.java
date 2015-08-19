@@ -18,15 +18,20 @@
  */
 package org.apache.lens.server.stats.store.log;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.lens.server.api.LensConfConstants;
-import org.apache.lens.server.api.events.LensEventService;
-import org.eclipse.jetty.util.ConcurrentHashSet;
-
 import java.util.Timer;
 
+import org.apache.lens.server.api.LensConfConstants;
+import org.apache.lens.server.api.events.LensEventService;
+import org.apache.lens.server.model.LogSegregationContext;
+
+import org.apache.hadoop.conf.Configuration;
+
+import org.eclipse.jetty.util.ConcurrentHashSet;
+
+import lombok.NonNull;
+
 /**
- * Class which handles the log4j rolled file.
+ * Class which handles the rolled log file.
  */
 public class StatisticsLogRollupHandler {
 
@@ -42,14 +47,18 @@ public class StatisticsLogRollupHandler {
   /** The scan set. */
   private final ConcurrentHashSet<String> scanSet = new ConcurrentHashSet<String>();
 
+  private final LogSegregationContext logSegregationContext;
+
+  public StatisticsLogRollupHandler(@NonNull final LogSegregationContext logSegregationContext) {
+    this.logSegregationContext = logSegregationContext;
+  }
   /**
    * Initalize the handler.
    *
-   * @param conf
-   *          configuration to be used while initialization.
+   * @param conf configuration to be used while initialization.
    */
   public void initialize(Configuration conf) {
-    task = new StatisticsLogFileScannerTask();
+    task = new StatisticsLogFileScannerTask(this.logSegregationContext);
     timer = new Timer();
     rate = conf.getLong(LensConfConstants.STATS_ROLLUP_SCAN_RATE, LensConfConstants.DEFAULT_STATS_ROLLUP_SCAN_RATE);
   }
@@ -57,8 +66,7 @@ public class StatisticsLogRollupHandler {
   /**
    * Start.
    *
-   * @param service
-   *          the service
+   * @param service the service
    */
   public void start(LensEventService service) {
     task.setService(service);
@@ -75,8 +83,7 @@ public class StatisticsLogRollupHandler {
   /**
    * Adds the to scan task.
    *
-   * @param event
-   *          the event
+   * @param event the event
    */
   public void addToScanTask(String event) {
     if (!scanSet.contains(event)) {

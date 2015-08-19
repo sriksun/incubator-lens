@@ -22,25 +22,26 @@ package org.apache.lens.cube.parse;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hadoop.hive.ql.ErrorMsg;
-import org.apache.hadoop.hive.ql.parse.ASTNode;
-import org.apache.hadoop.hive.ql.parse.HiveParser;
-import org.apache.hadoop.hive.ql.parse.QB;
-import org.apache.hadoop.hive.ql.parse.SemanticAnalyzer;
-import org.apache.hadoop.hive.ql.parse.SemanticException;
+import org.apache.hadoop.hive.ql.parse.*;
+
+import lombok.Getter;
 
 /**
  * Accepts cube query AST and rewrites into storage table query
  */
 public class CubeSemanticAnalyzer extends SemanticAnalyzer {
-  private final HiveConf conf;
+  private final Configuration queryConf;
+  private final HiveConf hiveConf;
   private final List<ValidationRule> validationRules = new ArrayList<ValidationRule>();
-  private CubeQueryContext cubeQl;
+  @Getter
+  private QB cubeQB;
 
-  public CubeSemanticAnalyzer(HiveConf conf) throws SemanticException {
-    super(conf);
-    this.conf = conf;
+  public CubeSemanticAnalyzer(Configuration queryConf, HiveConf hiveConf) throws SemanticException {
+    super(hiveConf);
+    this.queryConf = queryConf;
+    this.hiveConf = hiveConf;
     setupRules();
   }
 
@@ -52,12 +53,7 @@ public class CubeSemanticAnalyzer extends SemanticAnalyzer {
   @Override
   public void analyzeInternal(ASTNode ast) throws SemanticException {
     reset();
-    QB qb = new QB(null, null, false);
-    // do not allow create table/view commands
-    // TODO Move this to a validation rule
-    if (ast.getToken().getType() == HiveParser.TOK_CREATETABLE || ast.getToken().getType() == HiveParser.TOK_CREATEVIEW) {
-      throw new SemanticException(ErrorMsg.CREATE_NOT_ALLOWED);
-    }
+    cubeQB = new QB(null, null, false);
 
     if (ast.getToken().getType() == HiveParser.TOK_QUERY) {
       if (((ASTNode) ast.getChild(0)).getToken().getType() == HiveParser.KW_CUBE) {
@@ -69,34 +65,9 @@ public class CubeSemanticAnalyzer extends SemanticAnalyzer {
       }
     }
     // analyzing from the ASTNode.
-    if (!doPhase1(ast, qb, initPhase1Ctx())) {
+    if (!doPhase1(ast, cubeQB, initPhase1Ctx())) {
       // if phase1Result false return
       return;
     }
-    cubeQl = new CubeQueryContext(ast, qb, conf);
-    // cubeQl.init();
-    // validate();
-
-    // TODO Move this to a validation Rule
-    // QBParseInfo qbp = qb.getParseInfo();
-    // TreeSet<String> ks = new TreeSet<String>(qbp.getClauseNames());
-    // if (ks.size() > 1) {
-    // throw new SemanticException("nested/sub queries not allowed yet");
-    // }
-    // Operator sinkOp = genPlan(qb);
-    // System.out.println(sinkOp.toString());
-  }
-
-  @Override
-  public void validate() throws SemanticException {
-    for (ValidationRule rule : validationRules) {
-      if (!rule.validate(cubeQl)) {
-        break;
-      }
-    }
-  }
-
-  public CubeQueryContext getQueryContext() {
-    return cubeQl;
   }
 }

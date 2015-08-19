@@ -21,14 +21,19 @@ package org.apache.lens.cube.parse;
 import java.util.Arrays;
 import java.util.List;
 
+import org.apache.lens.cube.metadata.UpdatePeriod;
+
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.lens.cube.metadata.UpdatePeriod;
 
 /**
  * Contains all configurations of cube query rewriting.
  */
-public class CubeQueryConfUtil {
+public final class CubeQueryConfUtil {
+  private CubeQueryConfUtil() {
+
+  }
+
   public static final String STORAGE_TABLES_SFX = ".storagetables";
   public static final String UPDATE_PERIODS_SFX = ".updateperiods";
   public static final String FACT_TABLES_SFX = ".facttables";
@@ -39,8 +44,6 @@ public class CubeQueryConfUtil {
   public static final String DRIVER_SUPPORTED_STORAGES = "lens.cube.query.driver." + "supported.storages";
   public static final String FAIL_QUERY_ON_PARTIAL_DATA = "lens.cube.query.fail.if.data.partial";
   public static final String NON_EXISTING_PARTITIONS = "lens.cube.query.nonexisting.partitions";
-  public static final String ADD_NON_EXISTING_PARTITIONS = "lens.cube.query.add.nonexisting.partitions";
-  public static final String ENABLE_MULTI_TABLE_SELECT = "lens.cube.query.enable.multi.table.select";
   public static final String QUERY_MAX_INTERVAL = "lens.cube.query.max.interval";
   public static final String PROCESS_TIME_PART_COL = "lens.cube.query.process.time" + ".partition.column";
   public static final String LOOK_AHEAD_PT_PARTS_PFX = "lens.cube.query.lookahead.ptparts.forinterval.";
@@ -54,7 +57,6 @@ public class CubeQueryConfUtil {
   public static final int DEFAULT_LOOK_AHEAD_PT_PARTS = 1;
   public static final boolean DEFAULT_ENABLE_GROUP_BY_TO_SELECT = false;
   public static final boolean DEFAULT_ENABLE_SELECT_TO_GROUPBY = false;
-  public static final boolean DEFAULT_ADD_NON_EXISTING_PARTITIONS = false;
   public static final boolean DEFAULT_REPLACE_TIMEDIM_WITH_PART_COL = true;
 
   public static String getLookAheadPTPartsKey(UpdatePeriod interval) {
@@ -100,6 +102,6 @@ public class CubeQueryConfUtil {
   public static final boolean DEFAULT_LIGHTEST_FACT_FIRST = false;
   public static final String TIME_RANGE_WRITER_CLASS = "lens.cube.query.time.range.writer.class";
   public static final Class<? extends TimeRangeWriter> DEFAULT_TIME_RANGE_WRITER = ORTimeRangeWriter.class
-      .asSubclass(TimeRangeWriter.class);
+    .asSubclass(TimeRangeWriter.class);
   public static final String PART_WHERE_CLAUSE_DATE_FORMAT = "lens.cube.query.partition.where.clause.format";
 }

@@ -209,4 +209,19 @@ public class LensQuery {
   @Getter
   private String queryName;
 
+  public Integer getErrorCode() {
+    return (this.status != null) ? this.status.getErrorCode() : null;
+  }
+
+  public String getErrorMessage() {
+    return (this.status!=null) ? this.status.getLensErrorTOErrorMsg() : null;
+  }
+
+  public String getQueryHandleString() {
+    return (this.queryHandle != null) ? this.queryHandle.getHandleIdString() : null;
+  }
+
+  public boolean queued() {
+    return this.status.queued();
+  }
 }

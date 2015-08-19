@@ -18,29 +18,30 @@
  */
 package org.apache.lens.cube.parse;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.apache.lens.cube.metadata.StorageConstants;
-
 import java.util.*;
 
-class StorageUtil {
-  private static final Log LOG = LogFactory.getLog(StorageUtil.class.getName());
+import org.apache.lens.cube.metadata.FactPartition;
+import org.apache.lens.cube.metadata.StorageConstants;
 
-  public static String getWherePartClause(String timeDimName, String tableName, List<String> parts) {
+public final class StorageUtil {
+  private StorageUtil() {
+
+  }
+
+  public static String getWherePartClause(String timeDimName, String tableName, Collection<String> parts) {
     if (parts.size() == 0) {
       return "";
     }
     StringBuilder partStr = new StringBuilder();
     String sep = "";
-    for (int i = 0; i < parts.size(); i++) {
+    for (String part : parts) {
       partStr.append(sep);
       partStr.append("(");
       partStr.append(tableName != null ? tableName : "%s");
       partStr.append(".");
       partStr.append(timeDimName);
       partStr.append(" = '");
-      partStr.append(parts.get(i));
+      partStr.append(part);
       partStr.append("'");
       partStr.append(")");
       sep = " OR ";
@@ -48,11 +49,24 @@ class StorageUtil {
     return partStr.toString();
   }
 
+  public static String getWherePartClauseWithIn(String timeDimName, String tableName, List<String> parts) {
+    if (parts.size() == 0) {
+      return "";
+    }
+    StringBuilder inClause = new StringBuilder();
+    String sep = "";
+    for (String part : parts) {
+      inClause.append(sep).append("'").append(part).append("'");
+      sep = ",";
+    }
+    return tableName + "." + timeDimName + " IN (" + inClause + ")";
+  }
+
   public static String getNotLatestClauseForDimensions(String alias, Set<String> timedDimensions, String partCol) {
     StringBuilder sb = new StringBuilder();
     String sep = "";
     for (String timePartCol : timedDimensions) {
-      if(!timePartCol.equals(partCol)) {
+      if (!timePartCol.equals(partCol)) {
         sb.append(sep).append(alias).append(".").append(timePartCol)
           .append(" != '").append(StorageConstants.LATEST_PARTITION_VALUE).append("'");
         sep = " AND ";
@@ -82,13 +96,11 @@ class StorageUtil {
    *
    * @param answeringParts       Map from partition to set of answering storage tables
    * @param minimalStorageTables from storage to covering parts
-   * @return true if multi table select is enabled, false otherwise
    */
-  static boolean getMinimalAnsweringTables(List<FactPartition> answeringParts,
+  static void getMinimalAnsweringTables(List<FactPartition> answeringParts,
     Map<String, Set<FactPartition>> minimalStorageTables) {
     // map from storage table to the partitions it covers
     Map<String, Set<FactPartition>> invertedMap = new HashMap<String, Set<FactPartition>>();
-    boolean enableMultiTableSelect = true;
     // invert the answering tables map and put in inverted map
     for (FactPartition part : answeringParts) {
       for (String table : part.getStorageTables()) {
@@ -109,18 +121,11 @@ class StorageUtil {
         Map<String, Set<FactPartition>> maxCoveringStorage = getMaxCoveringStorage(invertedMap, remaining);
         minimalStorageTables.putAll(maxCoveringStorage);
         Set<FactPartition> coveringSet = maxCoveringStorage.values().iterator().next();
-        if (enableMultiTableSelect) {
-          if (!coveringSet.containsAll(invertedMap.get(maxCoveringStorage.keySet().iterator().next()))) {
-            LOG.info("Disabling multi table select" + " because the partitions are not mutually exclusive");
-            enableMultiTableSelect = false;
-          }
-        }
         remaining.removeAll(coveringSet);
       }
     } else {
       minimalStorageTables.putAll(invertedMap);
     }
-    return enableMultiTableSelect;
   }
 
   private static Map<String, Set<FactPartition>> getMaxCoveringStorage(
@@ -142,10 +147,12 @@ class StorageUtil {
     }
     return Collections.singletonMap(maxCoveringStorage, maxCoveringSet);
   }
+
   public static String getWhereClause(String clause, String alias) {
     return String.format(clause, alias);
   }
+
   public static String getWhereClause(CandidateDim dim, String alias) {
-    return getWhereClause(dim.whereClause, alias);
+    return getWhereClause(dim.getWhereClause(), alias);
   }
 }

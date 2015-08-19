@@ -30,48 +30,50 @@ import java.util.Map;
 
 import javax.ws.rs.core.Form;
 
-import org.apache.lens.api.LensException;
 import org.apache.lens.api.LensSessionHandle;
-import org.apache.lens.api.ml.ModelMetadata;
-import org.apache.lens.api.ml.TestReport;
-import org.apache.lens.ml.LensML;
-import org.apache.lens.ml.MLAlgo;
-import org.apache.lens.ml.MLModel;
-import org.apache.lens.ml.MLTestReport;
+import org.apache.lens.ml.algo.api.MLAlgo;
+import org.apache.lens.ml.algo.api.MLModel;
+import org.apache.lens.ml.api.LensML;
+import org.apache.lens.ml.api.MLTestReport;
+import org.apache.lens.ml.api.ModelMetadata;
+import org.apache.lens.ml.api.TestReport;
+import org.apache.lens.server.api.error.LensException;
 
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Client side implementation of LensML
  */
+@Slf4j
 public class LensMLClient implements LensML, Closeable {
-  private static final Log LOG = LogFactory.getLog(LensMLClient.class);
 
   /** The client. */
   private LensMLJerseyClient client;
 
-  /**
-   * Instantiates a new lens ml client.
-   *
-   * @param clientConf the client conf
-   */
-  public LensMLClient(LensConnectionParams clientConf, String password) {
-    client = new LensMLJerseyClient(new LensConnection(clientConf), password);
-    LOG.info("Client created with new session");
+  public LensMLClient(String password) {
+    this(new LensClientConfig(), password);
   }
 
-  /**
-   * Instantiates a new lens ml client.
-   *
-   * @param clientConf the client conf
-   */
-  public LensMLClient(LensConnectionParams clientConf, LensSessionHandle sessionHandle) {
-    client = new LensMLJerseyClient(new LensConnection(clientConf, sessionHandle), sessionHandle);
-    LOG.info("Client created with existing session");
+  public LensMLClient(LensClientConfig conf, String password) {
+    this(conf, conf.getUser(), password);
+  }
+
+  public LensMLClient(String username, String password) {
+    this(new LensClientConfig(), username, password);
+  }
+
+  public LensMLClient(LensClientConfig conf, String username, String password) {
+    this(new LensClient(conf, username, password));
+  }
+
+  public LensMLClient(LensClient lensClient) {
+    client = new LensMLJerseyClient(lensClient.getConnection(), lensClient
+        .getConnection().getSessionHandle());
   }
 
   /**
@@ -178,7 +180,7 @@ public class LensMLClient implements LensML, Closeable {
         try {
           in.close();
         } catch (IOException e) {
-          e.printStackTrace();
+          log.error("Error closing stream.", e);
         }
       }
     }

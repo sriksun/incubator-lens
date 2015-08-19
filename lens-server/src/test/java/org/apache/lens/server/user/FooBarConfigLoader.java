@@ -18,19 +18,20 @@
  */
 package org.apache.lens.server.user;
 
-import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.lens.server.user.UserConfigLoader;
-
 import java.util.HashMap;
 import java.util.Map;
+
+import org.apache.lens.server.api.user.UserConfigLoader;
+
+import org.apache.hadoop.hive.conf.HiveConf;
 
 /**
  * The Class FooBarConfigLoader.
  */
-public class FooBarConfigLoader extends UserConfigLoader {
+public class FooBarConfigLoader implements UserConfigLoader {
 
   /** The const hash map. */
-  public static HashMap<String, String> CONST_HASH_MAP = new HashMap<String, String>() {
+  public static final HashMap<String, String> CONST_HASH_MAP = new HashMap<String, String>() {
     {
       put("key", "value");
     }
@@ -39,16 +40,14 @@ public class FooBarConfigLoader extends UserConfigLoader {
   /**
    * Instantiates a new foo bar config loader.
    *
-   * @param conf
-   *          the conf
+   * @param conf the conf
    */
   public FooBarConfigLoader(HiveConf conf) {
-    super(conf);
   }
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see org.apache.lens.server.user.UserConfigLoader#getUserConfig(java.lang.String)
    */
   @Override

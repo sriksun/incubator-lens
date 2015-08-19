@@ -23,7 +23,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.apache.lens.api.LensConf;
-import org.apache.lens.api.LensException;
 import org.apache.lens.api.Priority;
 import org.apache.lens.api.query.LensQuery;
 import org.apache.lens.api.query.QueryHandle;
@@ -32,19 +31,22 @@ import org.apache.lens.api.query.QueryStatus.Status;
 import org.apache.lens.server.api.LensConfConstants;
 import org.apache.lens.server.api.driver.DriverQueryStatus;
 import org.apache.lens.server.api.driver.LensDriver;
+import org.apache.lens.server.api.error.LensException;
+import org.apache.lens.server.api.query.collect.WaitingQueriesSelectionPolicy;
+import org.apache.lens.server.api.query.constraint.QueryLaunchingConstraint;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-
 import lombok.Getter;
 import lombok.Setter;
 
 /**
  * The Class QueryContext.
  */
-public class QueryContext extends AbstractQueryContext implements Comparable<QueryContext> {
+public class QueryContext extends AbstractQueryContext {
 
   /**
    * The Constant serialVersionUID.
@@ -166,7 +168,7 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
    * @param conf  the conf
    */
   public QueryContext(String query, String user, LensConf qconf, Configuration conf, Collection<LensDriver> drivers) {
-    this(query, user, qconf, conf, drivers, null);
+    this(query, user, qconf, conf, drivers, null, true);
   }
 
   /**
@@ -179,9 +181,10 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
    */
   public QueryContext(PreparedQueryContext prepared, String user, LensConf qconf, Configuration conf) {
     this(prepared.getUserQuery(), user, qconf, mergeConf(prepared.getConf(), conf), prepared.getDriverContext()
-      .getDriverQueryContextMap().keySet(), prepared.getDriverContext().getSelectedDriver());
+      .getDriverQueryContextMap().keySet(), prepared.getDriverContext().getSelectedDriver(), true);
     setDriverContext(prepared.getDriverContext());
     setSelectedDriverQuery(prepared.getSelectedDriverQuery());
+    setSelectedDriverQueryCost(prepared.getSelectedDriverQueryCost());
   }
 
   /**
@@ -195,8 +198,8 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
    * @param selectedDriver SelectedDriver
    */
   private QueryContext(String userQuery, String user, LensConf qconf, Configuration conf,
-      Collection<LensDriver> drivers, LensDriver selectedDriver) {
-    this(userQuery, user, qconf, conf, drivers, selectedDriver, System.currentTimeMillis());
+      Collection<LensDriver> drivers, LensDriver selectedDriver, boolean mergeDriverConf) {
+    this(userQuery, user, qconf, conf, drivers, selectedDriver, System.currentTimeMillis(), mergeDriverConf);
   }
   /**
    * Instantiates a new query context.
@@ -210,11 +213,11 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
    * @param submissionTime the submission time
    */
   QueryContext(String userQuery, String user, LensConf qconf, Configuration conf,
-    Collection<LensDriver> drivers, LensDriver selectedDriver, long submissionTime) {
-    super(userQuery, user, qconf, conf, drivers);
+    Collection<LensDriver> drivers, LensDriver selectedDriver, long submissionTime, boolean mergeDriverConf) {
+    super(userQuery, user, qconf, conf, drivers, mergeDriverConf);
     this.submissionTime = submissionTime;
     this.queryHandle = new QueryHandle(UUID.randomUUID());
-    this.status = new QueryStatus(0.0f, Status.NEW, "Query just got created", false, null, null);
+    this.status = new QueryStatus(0.0f, Status.NEW, "Query just got created", false, null, null, null);
     this.priority = Priority.NORMAL;
     this.lensConf = qconf;
     this.conf = conf;
@@ -243,8 +246,8 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
    * @return QueryContext object
    */
   public static QueryContext createContextWithSingleDriver(String query, String user, LensConf qconf,
-      Configuration conf, LensDriver driver, String lensSessionPublicId) {
-    QueryContext ctx = new QueryContext(query, user, qconf, conf, Lists.newArrayList(driver), driver);
+      Configuration conf, LensDriver driver, String lensSessionPublicId, boolean mergeDriverConf) {
+    QueryContext ctx = new QueryContext(query, user, qconf, conf, Lists.newArrayList(driver), driver, mergeDriverConf);
     ctx.setLensSessionIdentifier(lensSessionPublicId);
     return ctx;
   }
@@ -265,21 +268,6 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
       conf.set(entry.getKey(), entry.getValue());
     }
     return conf;
-  }
-
-  /*
-   * (non-Javadoc)
-   *
-   * @see java.lang.Comparable#compareTo(java.lang.Object)
-   */
-  @Override
-  public int compareTo(QueryContext other) {
-    int pcomp = this.priority.compareTo(other.priority);
-    if (pcomp == 0) {
-      return (int) (this.submissionTime - other.submissionTime);
-    } else {
-      return pcomp;
-    }
   }
 
   /**
@@ -330,7 +318,6 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
   /**
    * Set whether result is persisted on driver to false. Set by drivers when drivers are not persisting
    *
-   * @return true/false
    */
   public void unSetDriverPersistent() {
     isDriverPersistent = false;
@@ -339,15 +326,12 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
   /*
    * Introduced for Recovering finished query.
    */
-  void setStatusSkippingTransitionTest(QueryStatus newStatus) throws LensException {
+  public void setStatusSkippingTransitionTest(final QueryStatus newStatus) throws LensException {
     this.status = newStatus;
   }
 
-  public synchronized void setStatus(QueryStatus newStatus) throws LensException {
-    if (!this.status.isValidateTransition(newStatus.getStatus())) {
-      throw new LensException("Invalid state transition:[" + this.status.getStatus() + "->" + newStatus.getStatus()
-        + "]");
-    }
+  public synchronized void setStatus(final QueryStatus newStatus) throws LensException {
+    validateTransition(newStatus);
     this.status = newStatus;
   }
 
@@ -369,12 +353,12 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
 
   public boolean getCompressOutput() {
     return conf.getBoolean(LensConfConstants.QUERY_OUTPUT_ENABLE_COMPRESSION,
-      LensConfConstants.DEFAULT_OUTPUT_ENABLE_COMPRESSION);
+        LensConfConstants.DEFAULT_OUTPUT_ENABLE_COMPRESSION);
   }
 
   public long getMaxResultSplitRows() {
     return conf.getLong(LensConfConstants.RESULT_SPLIT_MULTIPLE_MAX_ROWS,
-      LensConfConstants.DEFAULT_RESULT_SPLIT_MULTIPLE_MAX_ROWS);
+        LensConfConstants.DEFAULT_RESULT_SPLIT_MULTIPLE_MAX_ROWS);
   }
 
   /**
@@ -384,10 +368,55 @@ public class QueryContext extends AbstractQueryContext implements Comparable<Que
    */
   public boolean splitResultIntoMultipleFiles() {
     return conf.getBoolean(LensConfConstants.RESULT_SPLIT_INTO_MULTIPLE,
-      LensConfConstants.DEFAULT_RESULT_SPLIT_INTO_MULTIPLE);
+        LensConfConstants.DEFAULT_RESULT_SPLIT_INTO_MULTIPLE);
   }
 
   public String getClusterUser() {
     return conf.get(LensConfConstants.SESSION_CLUSTER_USER, getSubmittedUser());
+  }
+
+
+  /**
+   * Get query handle string
+   * @return
+   */
+  @Override
+  public String getLogHandle() {
+    return getQueryHandleString();
+  }
+
+  public String getQueryHandleString() {
+    return queryHandle.getHandleIdString();
+  }
+
+  public void validateTransition(final QueryStatus newStatus) throws LensException {
+    if (!this.status.isValidTransition(newStatus.getStatus())) {
+      throw new LensException("Invalid state transition:from[" + this.status.getStatus() + " to "
+          + newStatus.getStatus() + "]");
+    }
+  }
+
+  public boolean finished() {
+    return this.status.finished();
+  }
+
+  public boolean launched() {
+    return this.status.launched();
+  }
+
+  public boolean running() {
+    return this.status.running();
+  }
+
+  public boolean queued() {
+    return this.status.queued();
+  }
+
+  public ImmutableSet<QueryLaunchingConstraint> getSelectedDriverQueryConstraints() {
+    return getSelectedDriver().getQueryConstraints();
+  }
+
+  public ImmutableSet<WaitingQueriesSelectionPolicy> getSelectedDriverSelectionPolicies() {
+    return getSelectedDriver().getWaitingQuerySelectionPolicies();
   }
 }

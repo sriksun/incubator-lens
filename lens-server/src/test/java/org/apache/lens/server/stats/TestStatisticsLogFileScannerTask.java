@@ -18,26 +18,35 @@
  */
 package org.apache.lens.server.stats;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.lens.server.api.events.LensEventService;
+import org.apache.lens.server.model.LogSegregationContext;
+import org.apache.lens.server.model.MappedDiagnosticLogSegregationContext;
 import org.apache.lens.server.stats.store.log.PartitionEvent;
 import org.apache.lens.server.stats.store.log.StatisticsLogFileScannerTask;
-import org.apache.log4j.FileAppender;
-import org.apache.log4j.Logger;
+
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
+import org.slf4j.LoggerFactory;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.FileAppender;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * The Class TestStatisticsLogFileScannerTask.
  */
+@Slf4j
 @Test(groups = "unit-test")
 public class TestStatisticsLogFileScannerTask {
 
@@ -47,16 +56,17 @@ public class TestStatisticsLogFileScannerTask {
   /** The hidden. */
   private File hidden;
 
+  private final LogSegregationContext logSegregationContext = new MappedDiagnosticLogSegregationContext();
+
   /**
    * Creates the test log file.
    *
-   * @throws Exception
-   *           the exception
+   * @throws Exception the exception
    */
   @BeforeMethod
   public void createTestLogFile() throws Exception {
-    f = new File("/tmp/test.log.2014-08-05-11-28");
-    hidden = new File("/tmp/.test.log.2014-08-05-11-28.swp");
+    f = new File("target/test.log.2014-08-05-11-28");
+    hidden = new File("target/.test.log.2014-08-05-11-28.swp");
     hidden.createNewFile();
     f.createNewFile();
   }
@@ -64,8 +74,7 @@ public class TestStatisticsLogFileScannerTask {
   /**
    * Delete test file.
    *
-   * @throws Exception
-   *           the exception
+   * @throws Exception the exception
    */
   @AfterMethod
   public void deleteTestFile() throws Exception {
@@ -76,19 +85,18 @@ public class TestStatisticsLogFileScannerTask {
   /**
    * Test scanner.
    *
-   * @throws Exception
-   *           the exception
+   * @throws Exception the exception
    */
   @Test
   public void testScanner() throws Exception {
-    Logger l = Logger.getLogger(TestStatisticsLogFileScannerTask.class);
-    FileAppender appender = new FileAppender();
+    Logger l = (Logger) LoggerFactory.getLogger(TestStatisticsLogFileScannerTask.class);
+    FileAppender<ILoggingEvent> appender = new FileAppender<ILoggingEvent>();
     String logFile = f.getParent() + File.separator + "test.log";
     appender.setFile(logFile);
     appender.setName(TestStatisticsLogFileScannerTask.class.getSimpleName());
     l.addAppender(appender);
 
-    StatisticsLogFileScannerTask task = new StatisticsLogFileScannerTask();
+    StatisticsLogFileScannerTask task = new StatisticsLogFileScannerTask(this.logSegregationContext);
     task.addLogFile(TestStatisticsLogFileScannerTask.class.getName());
     LensEventService service = Mockito.mock(LensEventService.class);
     final List<PartitionEvent> events = new ArrayList<PartitionEvent>();
@@ -101,7 +109,7 @@ public class TestStatisticsLogFileScannerTask {
         }
       }).when(service).notifyEvent(Mockito.any(PartitionEvent.class));
     } catch (Exception e) {
-      e.printStackTrace();
+      log.error("Error while running test.", e);
     }
     task.setService(service);
     task.run();

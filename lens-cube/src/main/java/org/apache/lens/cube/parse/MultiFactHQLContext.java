@@ -18,25 +18,21 @@
  */
 package org.apache.lens.cube.parse;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.hive.ql.ErrorMsg;
-import org.apache.hadoop.hive.ql.parse.ASTNode;
-import org.apache.hadoop.hive.ql.parse.SemanticException;
+import org.apache.lens.cube.error.LensCubeErrorCode;
 import org.apache.lens.cube.metadata.Dimension;
+import org.apache.lens.server.api.error.LensException;
+
+import org.apache.hadoop.hive.ql.parse.ASTNode;
+
+import com.google.common.collect.Lists;
 
 /**
- * Writes a join query with all the facts involved, with where, groupby and
- * having expressions pushed down to the fact queries.
+ * Writes a join query with all the facts involved, with where, groupby and having expressions pushed down to the fact
+ * queries.
  */
 class MultiFactHQLContext extends SimpleHQLContext {
-
-  public static Log LOG = LogFactory.getLog(MultiFactHQLContext.class.getName());
 
   private Map<Dimension, CandidateDim> dimsToQuery;
   private Set<CandidateFact> facts;
@@ -44,7 +40,7 @@ class MultiFactHQLContext extends SimpleHQLContext {
   private Map<CandidateFact, Set<Dimension>> factDimMap;
 
   MultiFactHQLContext(Set<CandidateFact> facts, Map<Dimension, CandidateDim> dimsToQuery,
-      Map<CandidateFact, Set<Dimension>> factDimMap, CubeQueryContext query) throws SemanticException {
+    Map<CandidateFact, Set<Dimension>> factDimMap, CubeQueryContext query) throws LensException {
     super();
     this.query = query;
     this.facts = facts;
@@ -52,7 +48,7 @@ class MultiFactHQLContext extends SimpleHQLContext {
     this.factDimMap = factDimMap;
   }
 
-  protected void setMissingExpressions() throws SemanticException {
+  protected void setMissingExpressions() throws LensException {
     setSelect(getSelectString());
     setFrom(getFromString());
     setWhere(getWhereString());
@@ -77,29 +73,42 @@ class MultiFactHQLContext extends SimpleHQLContext {
     return null;
   }
 
-  public String toHQL() throws SemanticException {
+  public String toHQL() throws LensException {
     return query.getInsertClause() + super.toHQL();
   }
 
-  private String getSelectString() throws SemanticException {
-    Map<Integer, Integer> selectToFactIndex = new HashMap<Integer, Integer>(query.getSelectAST().getChildCount());
+  private String getSelectString() throws LensException {
+    Map<Integer, List<Integer>> selectToFactIndex =
+      new HashMap<Integer, List<Integer>>(query.getSelectAST().getChildCount());
     int fi = 1;
     for (CandidateFact fact : facts) {
       for (int ind : fact.getSelectIndices()) {
         if (!selectToFactIndex.containsKey(ind)) {
-          selectToFactIndex.put(ind, fi);
+          selectToFactIndex.put(ind, Lists.<Integer>newArrayList());
         }
+        selectToFactIndex.get(ind).add(fi);
       }
       fi++;
     }
     StringBuilder select = new StringBuilder();
     for (int i = 0; i < query.getSelectAST().getChildCount(); i++) {
       if (selectToFactIndex.get(i) == null) {
-        throw new SemanticException(ErrorMsg.EXPRESSION_NOT_IN_ANY_FACT, HQLParser.getString((ASTNode) query
-            .getSelectAST().getChild(i)));
+        throw new LensException(LensCubeErrorCode.EXPRESSION_NOT_IN_ANY_FACT.getValue(),
+            HQLParser.getString((ASTNode) query.getSelectAST().getChild(i)));
       }
-      select.append("mq").append(selectToFactIndex.get(i)).append(".").append(query.getSelectAlias(i)).append(" ")
-          .append(query.getSelectFinalAlias(i));
+      if (selectToFactIndex.get(i).size() == 1) {
+        select.append("mq").append(selectToFactIndex.get(i).get(0)).append(".")
+          .append(query.getSelectAlias(i)).append(" ");
+      } else {
+        select.append("COALESCE(");
+        String sep = "";
+        for (Integer factIndex : selectToFactIndex.get(i)) {
+          select.append(sep).append("mq").append(factIndex).append(".").append(query.getSelectAlias(i));
+          sep = ", ";
+        }
+        select.append(") ");
+      }
+      select.append(query.getSelectFinalAlias(i));
       if (i != query.getSelectAST().getChildCount() - 1) {
         select.append(", ");
       }
@@ -115,7 +124,7 @@ class MultiFactHQLContext extends SimpleHQLContext {
     return facts;
   }
 
-  private String getFromString() throws SemanticException {
+  private String getFromString() throws LensException {
     StringBuilder fromBuilder = new StringBuilder();
     int aliasCount = 1;
     Iterator<CandidateFact> iter = facts.iterator();
@@ -131,13 +140,16 @@ class MultiFactHQLContext extends SimpleHQLContext {
         fromBuilder.append(" full outer join ");
       }
     }
-    fromBuilder.append(" on ");
     CandidateFact firstFact = facts.iterator().next();
+    if (!firstFact.getDimFieldIndices().isEmpty()) {
+      fromBuilder.append(" on ");
+    }
     for (int i = 2; i <= facts.size(); i++) {
       Iterator<Integer> dimIter = firstFact.getDimFieldIndices().iterator();
       while (dimIter.hasNext()) {
         String dim = query.getSelectAlias(dimIter.next());
-        fromBuilder.append("mq1").append(".").append(dim).append(" = ").append("mq").append(i).append(".").append(dim);
+        fromBuilder.append("mq1").append(".").append(dim).append(" <=> ").append("mq").append(i).append(".")
+          .append(dim);
         if (dimIter.hasNext()) {
           fromBuilder.append(" AND ");
         }

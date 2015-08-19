@@ -18,7 +18,11 @@
  */
 package org.apache.lens.cube.metadata;
 
-public interface MetastoreConstants {
+public final class MetastoreConstants {
+  private MetastoreConstants() {
+
+  }
+
   public static final String TABLE_TYPE_KEY = "cube.table.type";
   public static final String CUBE_TABLE_PFX = "cube.table.";
   public static final String WEIGHT_KEY_SFX = ".weight";
@@ -38,6 +42,7 @@ public interface MetastoreConstants {
   // Uber dimension constants
   public static final String DIMENSION_PFX = "dimension.";
   public static final String ATTRIBUTES_LIST_SFX = ".attributes.list";
+  public static final String PARTCOLS_SFX = ".part.cols";
   public static final String TIMED_DIMENSION_SFX = ".timed.dimension";
 
   // fact constants
@@ -46,9 +51,14 @@ public interface MetastoreConstants {
   public static final String CUBE_NAME_SFX = ".cubename";
   public static final String VALID_COLUMNS_SFX = ".valid.columns";
   public static final String FACT_AGGREGATED_PROPERTY = "cube.fact.is.aggregated";
+  public static final String FACT_ABSOLUTE_START_TIME = "cube.fact.absolute.start.time";
+  public static final String FACT_RELATIVE_START_TIME = "cube.fact.relative.start.time";
+  public static final String FACT_ABSOLUTE_END_TIME = "cube.fact.absolute.end.time";
 
   // dim table constants
+  // TODO: remove this and move to "dimtable."
   public static final String DIM_TBL_PFX = "dimtble.";
+  public static final String DIM_TABLE_PFX = "dimtable.";
   public static final String DUMP_PERIOD_SFX = ".dumpperiod";
   public static final String STORAGE_LIST_SFX = ".storages";
   public static final String DIM_NAME_SFX = ".dim.name";
@@ -62,6 +72,7 @@ public interface MetastoreConstants {
   public static final String COST_SFX = ".cost";
   public static final String DESC_SFX = ".description";
   public static final String DISPLAY_SFX = ".displaystring";
+  public static final String NUM_DISTINCT_VALUES = ".num.distinct.values";
 
   // measure constants
   public static final String MEASURE_KEY_PFX = "cube.measure.";
@@ -93,9 +104,12 @@ public interface MetastoreConstants {
   // storage constants
   public static final String STORAGE_ENTITY_PFX = "storage.";
   public static final String STORAGE_PFX = "cube.storagetable.";
+  public static final String PARTITION_TIMELINE_CACHE = "partition.timeline.cache.";
+  public static final String STORAGE_CLASS = "storage.class";
   public static final String TIME_PART_COLUMNS = "cube.storagetable.time.partcols";
   public static final String LATEST_PART_TIMESTAMP_SFX = ".latest.part.timestamp";
   public static final String PARTITION_UPDATE_PERIOD_SFX = ".partition.update.period";
   public static final String PARTITION_UPDATE_PERIOD = "cube.storagetable.partition.update.period";
   public static final String TIMEDIM_TO_PART_MAPPING_PFX = "cube.timedim.partition.";
+  public static final String TIMEDIM_RELATION = "cube.timedim.relation.";
 }

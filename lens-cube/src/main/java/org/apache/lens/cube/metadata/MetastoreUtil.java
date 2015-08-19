@@ -19,29 +19,27 @@
 
 package org.apache.lens.cube.metadata;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import static org.apache.lens.cube.metadata.MetastoreConstants.*;
+
+import java.text.ParseException;
+import java.util.*;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
+import org.apache.hadoop.hive.ql.metadata.Partition;
 
-public class MetastoreUtil implements MetastoreConstants {
+public class MetastoreUtil {
+  private MetastoreUtil() {
 
-  public static final String getFactStorageTableName(String factName, String storageName) {
+  }
+
+  public static final String getFactOrDimtableStorageTableName(String factName, String storageName) {
     return getStorageTableName(factName, Storage.getPrefix(storageName));
   }
 
-  public static final String getDimStorageTableName(String dimName, String storageName) {
-    return getStorageTableName(dimName, Storage.getPrefix(storageName));
-  }
-
   public static final String getStorageTableName(String cubeTableName, String storagePrefix) {
-    return storagePrefix + cubeTableName;
+    return (storagePrefix + cubeTableName).toLowerCase();
   }
 
   public static String getStorageClassKey(String name) {
@@ -61,6 +59,10 @@ public class MetastoreUtil implements MetastoreConstants {
 
   public static final String getDimAttributeListKey(String dimName) {
     return getDimPrefix(dimName) + ATTRIBUTES_LIST_SFX;
+  }
+
+  public static final String getDimTablePartsKey(String dimtableName) {
+    return DIM_TABLE_PFX + dimtableName + PARTCOLS_SFX;
   }
 
   public static final String getDimTimedDimensionKey(String dimName) {
@@ -88,6 +90,10 @@ public class MetastoreUtil implements MetastoreConstants {
 
   public static final String getDimTypePropertyKey(String dimName) {
     return getDimensionKeyPrefix(dimName) + TYPE_SFX;
+  }
+
+  public static final String getDimNumOfDistinctValuesPropertyKey(String dimName) {
+    return getDimensionKeyPrefix(dimName) + NUM_DISTINCT_VALUES;
   }
 
   public static String getHierachyElementKeyPFX(String dimName) {
@@ -123,7 +129,7 @@ public class MetastoreUtil implements MetastoreConstants {
   }
 
   public static final String getReferencesString(List<TableReference> references) {
-    String toks[] = new String[references.size()];
+    String[] toks = new String[references.size()];
 
     for (int i = 0; i < references.size(); i++) {
       TableReference reference = references.get(i);
@@ -186,6 +192,7 @@ public class MetastoreUtil implements MetastoreConstants {
   public static String getCubeJoinChainFullChainKey(String colName, int index) {
     return getCubeJoinChainKey(colName) + FULL_CHAIN_KEY + index;
   }
+
   public static String getCubeJoinChainDescriptionKey(String colName) {
     return getCubeJoinChainKey(colName) + DESC_SFX;
   }
@@ -205,6 +212,7 @@ public class MetastoreUtil implements MetastoreConstants {
   public static String getDimensionJoinChainFullChainKey(String colName, int index) {
     return getDimensionJoinChainKey(colName) + FULL_CHAIN_KEY + index;
   }
+
   public static String getDimensionJoinChainDescriptionKey(String colName) {
     return getDimensionJoinChainKey(colName) + DESC_SFX;
   }
@@ -212,7 +220,6 @@ public class MetastoreUtil implements MetastoreConstants {
   public static String getDimensionJoinChainDisplayKey(String colName) {
     return getDimensionJoinChainKey(colName) + DISPLAY_SFX;
   }
-
 
 
   // ////////////////////////
@@ -347,16 +354,16 @@ public class MetastoreUtil implements MetastoreConstants {
   // Utils ///
   // /////////////////////////
   public static <E extends Named> String getNamedStr(Collection<E> set) {
-    if (set == null || set.isEmpty()) {
+    if (set == null) {
       return "";
     }
+    String sep = "";
     StringBuilder valueStr = new StringBuilder();
     Iterator<E> it = set.iterator();
-    for (int i = 0; i < (set.size() - 1); i++) {
-      valueStr.append(it.next().getName());
-      valueStr.append(",");
+    while (it.hasNext()) {
+      valueStr.append(sep).append(it.next().getName());
+      sep = ",";
     }
-    valueStr.append(it.next().getName());
     return valueStr.toString();
   }
 
@@ -392,7 +399,8 @@ public class MetastoreUtil implements MetastoreConstants {
     addNameStrings(props, key, set, maxParamLength);
   }
 
-  static <E extends Named> void addNameStrings(Map<String, String> props, String key, Collection<E> set, int maxLength) {
+  static <E extends Named> void addNameStrings(Map<String, String> props, String key,
+    Collection<E> set, int maxLength) {
     List<String> namedStrings = getNamedStrs(set, maxLength);
     props.put(key + ".size", String.valueOf(namedStrings.size()));
     for (int i = 0; i < namedStrings.size(); i++) {
@@ -401,12 +409,18 @@ public class MetastoreUtil implements MetastoreConstants {
   }
 
   public static String getNamedStringValue(Map<String, String> props, String key) {
-    int size = Integer.parseInt(props.get(key + ".size"));
-    StringBuilder valueStr = new StringBuilder();
-    for (int i = 0; i < size; i++) {
-      valueStr.append(props.get(key + i));
+    if (props.containsKey(key + ".size")) {
+      int size = Integer.parseInt(props.get(key + ".size"));
+      StringBuilder valueStr = new StringBuilder();
+      for (int i = 0; i < size; i++) {
+        valueStr.append(props.get(key + i));
+      }
+      return valueStr.toString();
+    } else if (props.containsKey(key)) {
+      return props.get(key);
+    } else {
+      return null;
     }
-    return valueStr.toString();
   }
 
   public static String getObjectStr(Collection<?> set) {
@@ -455,5 +469,58 @@ public class MetastoreUtil implements MetastoreConstants {
     } else {
       cols.add(dim.getName().toLowerCase());
     }
+  }
+
+  public static String getPartitionInfoKeyPrefix(UpdatePeriod updatePeriod, String partCol) {
+    return STORAGE_PFX + PARTITION_TIMELINE_CACHE + updatePeriod.getName() + "." + partCol + ".";
+  }
+
+  public static String getPartitionTimelineStorageClassKey(UpdatePeriod updatePeriod, String partCol) {
+    return getPartitionInfoKeyPrefix(updatePeriod, partCol) + STORAGE_CLASS;
+  }
+
+  public static String getPartitionTimelineCachePresenceKey() {
+    return STORAGE_PFX + PARTITION_TIMELINE_CACHE + "present";
+  }
+
+  public static List<Partition> filterPartitionsByNonTimeParts(List<Partition> partitions,
+    Map<String, String> nonTimePartSpec,
+    String latestPartCol) {
+    ListIterator<Partition> iter = partitions.listIterator();
+    while (iter.hasNext()) {
+      Partition part = iter.next();
+      boolean ignore = false;
+      for (Map.Entry<String, String> entry1 : part.getSpec().entrySet()) {
+        if ((nonTimePartSpec == null || !nonTimePartSpec.containsKey(entry1.getKey()))
+          && !entry1.getKey().equals(latestPartCol)) {
+          try {
+            UpdatePeriod.valueOf(part.getParameters().get(MetastoreConstants.PARTITION_UPDATE_PERIOD))
+              .format()
+              .parse(entry1.getValue());
+          } catch (ParseException e) {
+            ignore = true;
+          }
+        }
+      }
+
+      if (ignore) {
+        iter.remove();
+      }
+    }
+    return partitions;
+  }
+
+  public static Date getLatestTimeStampOfDimtable(Partition part, String partCol) throws HiveException {
+    if (part != null) {
+      String latestTimeStampStr = part.getParameters().get(MetastoreUtil.getLatestPartTimestampKey(partCol));
+      String latestPartUpdatePeriod = part.getParameters().get(MetastoreConstants.PARTITION_UPDATE_PERIOD);
+      UpdatePeriod latestUpdatePeriod = UpdatePeriod.valueOf(latestPartUpdatePeriod.toUpperCase());
+      try {
+        return latestUpdatePeriod.format().parse(latestTimeStampStr);
+      } catch (ParseException e) {
+        throw new HiveException(e);
+      }
+    }
+    return null;
   }
 }

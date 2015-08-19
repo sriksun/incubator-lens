@@ -18,44 +18,42 @@
  */
 package org.apache.lens.server.user;
 
-import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.lens.server.api.LensConfConstants;
-
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import org.apache.lens.server.api.LensConfConstants;
+import org.apache.lens.server.api.user.UserConfigLoader;
+import org.apache.lens.server.api.user.UserConfigLoaderException;
+
+import org.apache.hadoop.hive.conf.HiveConf;
+
+import com.google.common.collect.Maps;
+
 /**
  * The Class PropertyBasedUserConfigLoader.
  */
-public class PropertyBasedUserConfigLoader extends UserConfigLoader {
+public class PropertyBasedUserConfigLoader implements UserConfigLoader {
 
   /** The user map. */
-  private HashMap<String, Map<String, String>> userMap;
+  private HashMap<String, Map<String, String>> userMap = Maps.newHashMap();
 
   /**
    * Instantiates a new property based user config loader.
    *
-   * @param conf
-   *          the conf
-   * @throws UserConfigLoaderException
-   *           the user config loader exception
+   * @param conf the conf
+   * @throws UserConfigLoaderException the user config loader exception
    */
   public PropertyBasedUserConfigLoader(HiveConf conf) throws UserConfigLoaderException {
-    super(conf);
-    userMap = new HashMap<String, Map<String, String>>();
     Properties properties = new Properties();
-    String filename = hiveConf.get(LensConfConstants.USER_RESOLVER_PROPERTYBASED_FILENAME, null);
+    String filename = conf.get(LensConfConstants.USER_RESOLVER_PROPERTYBASED_FILENAME, null);
     if (filename == null) {
       throw new UserConfigLoaderException("property file path not provided for property based resolver."
-          + "Please set property " + LensConfConstants.USER_RESOLVER_PROPERTYBASED_FILENAME);
+        + "Please set property " + LensConfConstants.USER_RESOLVER_PROPERTYBASED_FILENAME);
     }
     try {
-      properties.load(new InputStreamReader(new FileInputStream(new File(filename))));
+      properties.load(new InputStreamReader(new FileInputStream(new File(filename)), "UTF-8"));
     } catch (IOException e) {
       throw new UserConfigLoaderException("property file not found. Provided path was: " + filename);
     }
@@ -73,7 +71,7 @@ public class PropertyBasedUserConfigLoader extends UserConfigLoader {
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see org.apache.lens.server.user.UserConfigLoader#getUserConfig(java.lang.String)
    */
   @Override

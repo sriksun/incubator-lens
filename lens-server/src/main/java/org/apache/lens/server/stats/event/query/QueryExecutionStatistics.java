@@ -18,23 +18,29 @@
  */
 package org.apache.lens.server.stats.event.query;
 
-import lombok.Getter;
-import lombok.Setter;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
-import org.apache.hadoop.hive.ql.metadata.Table;
-import org.apache.hadoop.mapred.TextInputFormat;
+import java.util.LinkedList;
+
 import org.apache.lens.api.query.QueryStatus;
 import org.apache.lens.lib.query.JSonSerde;
 import org.apache.lens.server.api.LensConfConstants;
 import org.apache.lens.server.stats.event.LoggableLensStatistics;
 
-import java.util.LinkedList;
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
+import org.apache.hadoop.hive.ql.metadata.Table;
+import org.apache.hadoop.mapred.TextInputFormat;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import lombok.extern.slf4j.Slf4j;
+
 
 /**
  * Statistics class used to capture query information.
  */
+@Slf4j
 public class QueryExecutionStatistics extends LoggableLensStatistics {
 
   /** The handle. */
@@ -98,6 +104,7 @@ public class QueryExecutionStatistics extends LoggableLensStatistics {
   private QueryDriverStatistics driverStats;
 
   // Used while reflection to create hive table.
+
   /**
    * Instantiates a new query execution statistics.
    */
@@ -108,8 +115,7 @@ public class QueryExecutionStatistics extends LoggableLensStatistics {
   /**
    * Instantiates a new query execution statistics.
    *
-   * @param eventTime
-   *          the event time
+   * @param eventTime the event time
    */
   public QueryExecutionStatistics(long eventTime) {
     super(eventTime);
@@ -117,13 +123,13 @@ public class QueryExecutionStatistics extends LoggableLensStatistics {
 
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see org.apache.lens.server.stats.event.LoggableLensStatistics#getHiveTable(org.apache.hadoop.conf.Configuration)
    */
   @Override
-  public Table getHiveTable(Configuration conf) {
+  public Table getHiveTable(HiveConf conf) {
     Table table = new Table(conf.get(LensConfConstants.STATISTICS_DATABASE_KEY,
-        LensConfConstants.DEFAULT_STATISTICS_DATABASE), this.getClass().getSimpleName());
+      LensConfConstants.DEFAULT_STATISTICS_DATABASE), this.getClass().getSimpleName());
     LinkedList<FieldSchema> colList = new LinkedList<FieldSchema>();
     colList.add(new FieldSchema("handle", "string", "Query Handle"));
     colList.add(new FieldSchema("userQuery", "string", "User Query before rewrite"));
@@ -145,7 +151,7 @@ public class QueryExecutionStatistics extends LoggableLensStatistics {
     try {
       table.setInputFormatClass(TextInputFormat.class.getName());
     } catch (HiveException e) {
-      e.printStackTrace();
+      log.error("Encountered hive exception.", e);
     }
     return table;
   }

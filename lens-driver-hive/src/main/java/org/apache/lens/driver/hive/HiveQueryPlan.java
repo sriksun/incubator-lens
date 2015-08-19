@@ -18,15 +18,12 @@
  */
 package org.apache.lens.driver.hive;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import org.apache.lens.api.query.QueryCost;
 import org.apache.lens.api.query.QueryPrepareHandle;
 import org.apache.lens.server.api.LensConfConstants;
 import org.apache.lens.server.api.driver.DriverQueryPlan;
+import org.apache.lens.server.api.query.cost.QueryCost;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -34,16 +31,19 @@ import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.metadata.Table;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * The Class HiveQueryPlan.
  */
+@Slf4j
 public class HiveQueryPlan extends DriverQueryPlan {
 
+  @Getter
+  private final QueryCost cost;
   /** The explain output. */
   private String explainOutput;
-
-  /** The partitions. */
-  private Map<String, List<String>> partitions;
 
   /**
    * The Enum ParserState.
@@ -98,12 +98,12 @@ public class HiveQueryPlan extends DriverQueryPlan {
    * @param metastoreConf the metastore conf
    * @throws HiveException the hive exception
    */
-  public HiveQueryPlan(List<String> explainOutput, QueryPrepareHandle prepared, HiveConf metastoreConf)
+  public HiveQueryPlan(List<String> explainOutput, QueryPrepareHandle prepared, HiveConf metastoreConf, QueryCost cost)
     throws HiveException {
+    this.cost = cost;
     setPrepareHandle(prepared);
     setExecMode(ExecMode.BATCH);
     setScanMode(ScanMode.PARTIAL_SCAN);
-    partitions = new LinkedHashMap<String, List<String>>();
     this.explainOutput = StringUtils.join(explainOutput, '\n');
     extractPlanDetails(explainOutput, metastoreConf);
   }
@@ -120,7 +120,6 @@ public class HiveQueryPlan extends DriverQueryPlan {
     ParserState prevState = state;
     ArrayList<ParserState> states = new ArrayList<ParserState>();
     Hive metastore = Hive.get(metastoreConf);
-    List<String> partList = null;
 
     for (int i = 0; i < explainOutput.size(); i++) {
       String line = explainOutput.get(i);
@@ -141,26 +140,6 @@ public class HiveQueryPlan extends DriverQueryPlan {
         break;
       case TABLE_SCAN:
         // no op
-        break;
-      case JOIN:
-        if (tr.equals("condition map:")) {
-          numJoins++;
-        }
-        break;
-      case SELECT:
-        if (tr.startsWith("expressions:") && states.get(states.size() - 1) == ParserState.TABLE_SCAN) {
-          numSels += StringUtils.split(tr, ",").length;
-        }
-        break;
-      case GROUPBY_EXPRS:
-        if (tr.startsWith("aggregations:")) {
-          numAggrExprs += StringUtils.split(tr, ",").length;
-        }
-        break;
-      case GROUPBY_KEYS:
-        if (tr.startsWith("keys:")) {
-          numGbys += StringUtils.split(tr, ",").length;
-        }
         break;
       case PARTITION:
         String partConditionStr = null;
@@ -187,7 +166,7 @@ public class HiveQueryPlan extends DriverQueryPlan {
               Table tbl = metastore.getTable(table, false);
               if (tbl == null) {
                 // table not found, possible case if query is create table
-                HiveDriver.LOG.info("Table " + table + " not found while extracting plan details");
+                log.info("Table {} not found while extracting plan details", table);
                 continue;
               }
               tablesQueried.add(table);
@@ -201,9 +180,9 @@ public class HiveQueryPlan extends DriverQueryPlan {
             }
 
             if (partConditionStr != null) {
-              List<String> tablePartitions = partitions.get(table);
+              Set<String> tablePartitions = (Set<String>) partitions.get(table);
               if (tablePartitions == null) {
-                tablePartitions = new ArrayList<String>();
+                tablePartitions = new HashSet<String>();
                 partitions.put(table, tablePartitions);
               }
               tablePartitions.add(partConditionStr);
@@ -215,6 +194,8 @@ public class HiveQueryPlan extends DriverQueryPlan {
             break;
           }
         }
+        break;
+      default:
         break;
       }
     }
@@ -259,18 +240,5 @@ public class HiveQueryPlan extends DriverQueryPlan {
   @Override
   public String getPlan() {
     return explainOutput;
-  }
-
-  @Override
-  public QueryCost getCost() {
-    /*
-     * Return query cost as 1 so that if JDBC storage and other storage is present, JDBC is given preference.
-     */
-    return new QueryCost(1, 1);
-  }
-
-  @Override
-  public Map<String, List<String>> getPartitions() {
-    return partitions;
   }
 }

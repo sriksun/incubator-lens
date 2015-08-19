@@ -18,8 +18,8 @@
  */
 package org.apache.lens.server.api.driver;
 
-import org.apache.lens.api.LensException;
 import org.apache.lens.api.query.QueryResult;
+import org.apache.lens.server.api.error.LensException;
 
 /**
  * Result set returned by driver.
@@ -32,7 +32,7 @@ public abstract class LensResultSet {
    * @return The size if available, -1 if not available.
    * @throws LensException the lens exception
    */
-  public abstract int size() throws LensException;
+  public abstract Integer size() throws LensException;
 
   /**
    * Get the result set metadata

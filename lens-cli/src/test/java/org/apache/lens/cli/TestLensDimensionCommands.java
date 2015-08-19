@@ -18,25 +18,30 @@
  */
 package org.apache.lens.cli;
 
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+
 import java.io.*;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.Arrays;
 
+import org.apache.lens.api.metastore.XJoinChains;
 import org.apache.lens.cli.commands.LensDimensionCommands;
+import org.apache.lens.cli.table.XJoinChainTable;
 import org.apache.lens.client.LensClient;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.testng.Assert;
 import org.testng.annotations.Test;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * The Class TestLensDimensionCommands.
  */
+@Slf4j
 public class TestLensDimensionCommands extends LensCliApplicationTest {
-
-  /** The Constant LOG. */
-  private static final Logger LOG = LoggerFactory.getLogger(TestLensDimensionCommands.class);
 
   /** The command. */
   private static LensDimensionCommands command = null;
@@ -58,7 +63,7 @@ public class TestLensDimensionCommands extends LensCliApplicationTest {
    */
   public static void createDimension() throws URISyntaxException {
     URL dimensionSpec = TestLensDimensionCommands.class.getClassLoader().getResource("test-dimension.xml");
-    getCommand().createDimension(new File(dimensionSpec.toURI()).getAbsolutePath());
+    getCommand().createDimension(new File(dimensionSpec.toURI()));
   }
 
   /**
@@ -69,18 +74,31 @@ public class TestLensDimensionCommands extends LensCliApplicationTest {
    */
   @Test
   public void testDimensionCommands() throws Exception {
-    LOG.debug("Starting to test dimension commands");
+    log.debug("Starting to test dimension commands");
     URL dimensionSpec = TestLensDimensionCommands.class.getClassLoader().getResource("test-dimension.xml");
     String dimensionList = getCommand().showDimensions();
     Assert.assertFalse(dimensionList.contains("test_dim"));
     createDimension();
     dimensionList = getCommand().showDimensions();
     Assert.assertTrue(dimensionList.contains("test_dim"));
-
+    testFields(getCommand());
+    testJoinChains(getCommand());
     testUpdateCommand(new File(dimensionSpec.toURI()), getCommand());
     getCommand().dropDimension("test_dim");
     dimensionList = getCommand().showDimensions();
     Assert.assertFalse(dimensionList.contains("test_dim"));
+  }
+
+  private void testJoinChains(LensDimensionCommands command) {
+    assertEquals(command.showJoinChains("test_dim"), new XJoinChainTable(new XJoinChains()).toString());
+  }
+
+  private void testFields(LensDimensionCommands qCom) {
+    String testDimFields = qCom.showQueryableFields("test_dim", true);
+    for (String field : Arrays.asList("detail", "id", "d2id", "name")) {
+      assertTrue(testDimFields.contains(field));
+    }
+    assertFalse(testDimFields.contains("measure"));
   }
 
   /**
@@ -105,23 +123,23 @@ public class TestLensDimensionCommands extends LensCliApplicationTest {
       String xmlContent = sb.toString();
 
       xmlContent = xmlContent.replace("<property name=\"test_dim.prop\" value=\"test\" />\n",
-          "<property name=\"test_dim.prop\" value=\"test\" />"
-              + "\n<property name=\"test_dim.prop1\" value=\"test1\" />\n");
+        "<property name=\"test_dim.prop\" value=\"test\" />"
+          + "\n<property name=\"test_dim.prop1\" value=\"test1\" />\n");
 
-      File newFile = new File("/tmp/test_dim1.xml");
+      File newFile = new File("target/test_dim1.xml");
       Writer writer = new OutputStreamWriter(new FileOutputStream(newFile));
       writer.write(xmlContent);
       writer.close();
 
       String desc = command.describeDimension("test_dim");
-      LOG.debug(desc);
+      log.debug(desc);
       String propString = "name : test_dim.prop  value : test";
       String propString1 = "name : test_dim.prop1  value : test1";
       Assert.assertTrue(desc.contains(propString));
 
-      command.updateDimension("test_dim /tmp/test_dim1.xml");
+      command.updateDimension("test_dim", new File("target/test_dim1.xml"));
       desc = command.describeDimension("test_dim");
-      LOG.debug(desc);
+      log.debug(desc);
       Assert.assertTrue(desc.contains(propString));
 
       Assert.assertTrue(desc.contains(propString1));
@@ -129,7 +147,7 @@ public class TestLensDimensionCommands extends LensCliApplicationTest {
       newFile.delete();
 
     } catch (Throwable t) {
-      t.printStackTrace();
+      log.error("Testing update dimension failed with exception", t);
       Assert.fail("Testing update dimension failed with exception" + t.getMessage());
     }
   }

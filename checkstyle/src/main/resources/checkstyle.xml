@@ -57,10 +57,12 @@
 
     <!-- Checks whether files end with a new line.                        -->
     <!-- See http://checkstyle.sf.net/config_misc.html#NewlineAtEndOfFile -->
-    <module name="NewlineAtEndOfFile"/>
+    <module name="NewlineAtEndOfFile">
+      <property name="lineSeparator" value="lf"/>
+    </module>
 
     <module name="FileLength">
-      <property name="max" value="2500"/>
+      <property name="max" value="3500"/>
     </module>
     <module name="FileTabCharacter"/>
 
@@ -125,7 +127,10 @@
           <property name="max" value="500"/>
           <property name="countEmpty" value="false"/>
         </module>
-        <module name="ParameterNumber"/>
+        <!--TODO: remove max = 15 condition. -->
+        <module name="ParameterNumber">
+          <property name="max" value="15" />
+        </module>
         <module name="OuterTypeNumber"/>
 
         <!-- Checks for whitespace                               -->
@@ -237,9 +242,16 @@
 
     <!-- allow warnings to be suppressed -->
     <module name="SuppressionCommentFilter">
-        <property name="offCommentFormat" value="SUSPEND CHECKSTYLE CHECK ParameterNumberCheck|VisibilityModifierCheck|HiddenFieldCheck|MethodName|HideUtilityClassConstructorCheck"/>
-        <property name="onCommentFormat" value="RESUME CHECKSTYLE CHECK ParameterNumberCheck|VisibilityModifierCheck|HiddenFieldCheck|MethodName|HideUtilityClassConstructorCheck"/>
-        <property name="checkFormat" value="ParameterNumberCheck|VisibilityModifierCheck|HiddenFieldCheck|MethodName|HideUtilityClassConstructorCheck"/>
+        <property name="offCommentFormat" value="SUSPEND CHECKSTYLE CHECK ParameterNumberCheck|VisibilityModifierCheck|HiddenFieldCheck|MethodName|HideUtilityClassConstructorCheck|DoubleCheckedLockingCheck|InnerAssignmentCheck"/>
+        <property name="onCommentFormat" value="RESUME CHECKSTYLE CHECK ParameterNumberCheck|VisibilityModifierCheck|HiddenFieldCheck|MethodName|HideUtilityClassConstructorCheck|DoubleCheckedLockingCheck|InnerAssignmentCheck"/>
+        <property name="checkFormat" value="ParameterNumberCheck|VisibilityModifierCheck|HiddenFieldCheck|MethodName|HideUtilityClassConstructorCheck|DoubleCheckedLockingCheck|InnerAssignmentCheck"/>
+    </module>
+
+    <module name="RegexpSingleline">
+        <property name="severity" value="error" />
+        <property name="format" value="\w*.printStackTrace\w*"  />
+        <property name="message" value="Print stack trace not allowed. Use Logger." />
+        <property name="fileExtensions" value="java" />
     </module>
 
     <!--module name="SuppressionFilter">

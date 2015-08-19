@@ -43,7 +43,7 @@ import org.apache.hadoop.util.ReflectionUtils;
 
 /**
  * Provides abstract implementation of the query output formatter.
- * <p/>
+ * <p></p>
  * In this it initializes column names, types column object inspectors Also provides methods to construct header from
  * serde
  */
@@ -137,7 +137,7 @@ public abstract class AbstractOutputFormatter implements QueryOutputFormatter {
     StringBuilder typesSb = new StringBuilder();
     StringBuilder headerTypes = new StringBuilder();
 
-    if ((metadata != null) && (!metadata.getColumns().isEmpty())) {
+    if ((metadata != null) && (metadata.getColumns() != null) && (!metadata.getColumns().isEmpty())) {
       for (int pos = 0; pos < metadata.getColumns().size(); pos++) {
         if (pos != 0) {
           typesSb.append(",");

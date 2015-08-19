@@ -18,35 +18,31 @@
  */
 package org.apache.lens.server;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.hive.service.AbstractService;
-import org.apache.lens.api.LensException;
 import org.apache.lens.server.api.LensConfConstants;
+import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.events.LensEvent;
 import org.apache.lens.server.api.events.LensEventListener;
 import org.apache.lens.server.api.events.LensEventService;
+import org.apache.lens.server.api.health.HealthStatus;
+
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hive.service.AbstractService;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Implementation of LensEventService
  */
+@Slf4j
 public class EventServiceImpl extends AbstractService implements LensEventService {
 
-  /** The Constant LOG. */
-  public static final Log LOG = LogFactory.getLog(EventServiceImpl.class);
-
   /** The event listeners. */
-  private final Map<Class<? extends LensEvent>, List<LensEventListener>> eventListeners = new HashMap<Class<? extends LensEvent>, List<LensEventListener>>();
+  private final Map<Class<? extends LensEvent>, List<LensEventListener>> eventListeners
+    = new HashMap<Class<? extends LensEvent>, List<LensEventListener>>();
 
   /** The event handler pool. */
   private ExecutorService eventHandlerPool;
@@ -54,8 +50,7 @@ public class EventServiceImpl extends AbstractService implements LensEventServic
   /**
    * Instantiates a new event service impl.
    *
-   * @param name
-   *          the name
+   * @param name the name
    */
   public EventServiceImpl(String name) {
     super(name);
@@ -70,7 +65,7 @@ public class EventServiceImpl extends AbstractService implements LensEventServic
   public synchronized void init(HiveConf hiveConf) {
     int numProcs = Runtime.getRuntime().availableProcessors();
     eventHandlerPool = Executors.newFixedThreadPool(hiveConf.getInt(LensConfConstants.EVENT_SERVICE_THREAD_POOL_SIZE,
-        numProcs));
+      numProcs));
     super.init(hiveConf);
   }
 
@@ -86,7 +81,7 @@ public class EventServiceImpl extends AbstractService implements LensEventServic
     synchronized (eventListeners) {
       for (List<LensEventListener> listeners : eventListeners.values()) {
         if (listeners.remove(listener)) {
-          LOG.info("Removed listener " + listener);
+          log.info("Removed listener {}", listener);
         }
       }
     }
@@ -95,10 +90,8 @@ public class EventServiceImpl extends AbstractService implements LensEventServic
   /**
    * Handle event.
    *
-   * @param listeners
-   *          the listeners
-   * @param evt
-   *          the evt
+   * @param listeners the listeners
+   * @param evt       the evt
    */
   @SuppressWarnings("unchecked")
   private void handleEvent(List<LensEventListener> listeners, LensEvent evt) {
@@ -107,7 +100,7 @@ public class EventServiceImpl extends AbstractService implements LensEventServic
         try {
           listener.onEvent(evt);
         } catch (Exception exc) {
-          LOG.error("Error in handling event" + evt.getEventId() + " for listener " + listener, exc);
+          log.error("Error in handling event {} for listener {}", evt.getEventId(), listener, exc);
         }
       }
     }
@@ -124,8 +117,7 @@ public class EventServiceImpl extends AbstractService implements LensEventServic
     /**
      * Instantiates a new event handler.
      *
-     * @param event
-     *          the event
+     * @param event the event
      */
     EventHandler(LensEvent event) {
       this.event = event;
@@ -180,6 +172,15 @@ public class EventServiceImpl extends AbstractService implements LensEventServic
     return Collections.unmodifiableList(eventListeners.get(eventType));
   }
 
+  @Override
+  public HealthStatus getHealthStatus() {
+    return (this.getServiceState().equals(STATE.STARTED)
+        && !eventHandlerPool.isShutdown()
+        && !eventHandlerPool.isTerminated())
+        ? new HealthStatus(true, "Event service is healthy.")
+        : new HealthStatus(false, "Event service is unhealthy.");
+  }
+
   /*
    * (non-Javadoc)
    *
@@ -206,11 +207,11 @@ public class EventServiceImpl extends AbstractService implements LensEventServic
             pendingMsg.append(((EventHandler) handler).event.getEventId()).append(",");
           }
         }
-        LOG.info("Event listener service stopped while " + pending.size() + " events still pending");
-        LOG.info(pendingMsg.toString());
+        log.info("Event listener service stopped while {} events still pending", pending.size());
+        log.info(pendingMsg.toString());
       }
     }
-    LOG.info("Event service stopped");
+    log.info("Event service stopped");
     super.stop();
   }
 
@@ -234,7 +235,7 @@ public class EventServiceImpl extends AbstractService implements LensEventServic
       }
       listeners.add(listener);
     }
-    LOG.info("Added listener " + listener + " for type:" + eventType.getName());
+    log.info("Added listener {} for type:{}", listener, eventType.getName());
   }
 
   /*
@@ -249,7 +250,7 @@ public class EventServiceImpl extends AbstractService implements LensEventServic
       List<LensEventListener> listeners = eventListeners.get(eventType);
       if (listeners != null) {
         if (listeners.remove(listener)) {
-          LOG.info("Removed listener " + listener);
+          log.info("Removed listener {}", listener);
         }
       }
     }

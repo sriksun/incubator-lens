@@ -33,6 +33,25 @@ Committer Guide
 
   * {{{http://www.apache.org/dev/committers.html#committer-responsibilities} Committer Responsibilities}}
 
+  * As first commit - Add your name to the list of Committers in pom.xml of the project. Follow the steps in commit section for instructions.
+  A typical committer tag would look like
+
++---
+
+<developer>
+  <id>amareshwari</id>
+  <email>amareshwari@apache.org</email>
+  <name>Amareshwari Sriramadasu</name>
+  <timezone>+5.5</timezone>
+  <roles>
+    <role>PPMC</role>
+    <role>Committer</role>
+  </roles>
+</developer>
+
++---
+
+
 * Review
 
   Lens committers should, as often as possible, attempt to review patches submitted by others. Ideally every submitted
@@ -69,11 +88,21 @@ Committer Guide
   * Ensure that 24 hours have elapsed since the jira is made patch available or the review request is up. As a practice
    we should observe this, but it should be possible to consciously override and commit with a shorter turnaround time.
 
-  * Apply the patch attached on jira. The patch should licensed under apache license.
+  * Cross check if your git user.name and user.email are properly configured. Set username and email with commands
 
 +---+
 
-  git apply -p0 <final-patch>.patch
+git config user.name "Amareshwari Sriramadasu"
+git config user.email "amareshwari@apache.org"
+
++---+
+
+  * Apply the patch attached on jira. The patch should be licensed under apache license.
+
++---+
+
+  git apply --check lens_patch.patch
+  git apply lens_patch.patch
 
 +---+
 
@@ -82,9 +111,11 @@ Committer Guide
   * Include the Jira issue id in the commit message, along with a short description of the change and the name of the
     contributor. Be sure to get the issue id right, as this causes Jira to link to the change in git.
 
+  * Keep yourself as committer and the contributor as the author of the commit.
+
 +---+
 
-    Example commit message: "LENS-123. Adds awesome feature to lens. (Jaideep Dhok via amareshwari)"
+  git commit -a --author "Amareshwari Sriramadasu <amareshwari@apache.org>" -m "LENS-123 : Adds awesome feature to lens."
 
 +---+
 
@@ -97,16 +128,30 @@ Committer Guide
   * Add appropriate release note about what the issue is fixing. New features should have elaborate release note on
   how to use the feature.
 
+
+* Reverting a commit
+
+  * In case you messed up your first commit - you should post a revert commit to cancel the commit by a reverse patch
+   and then post a new commit with appropriate changes.
+
++---
+
+git revert HEAD~1..HEAD # To revert 1 commit.
+or,
+git revert a4r9593432 # To revert particular commit by commit id.
+
++---
+
 * Backporting patches
 
-  Once the patch is pushed to master, it can be cherry-picked and applied on other major version lines. 
+  Once the patch is pushed to master, it can be cherry-picked and applied on other major version lines.
   If the patch is not applicable for master and only applicable to the release version, then above guide lines of
   review and commit needs to be followed with change of committing branch to be the release branch.
 
   Fix version needs to include this release version as well.
 
 * Updating Lens site
- 
+
   Lens uses Apache SVN Pub-Sub system to maintain its website. The script tools/scripts/generate-site-public.sh can be used to generate the
 	documentation, which has to be committed to website svn. Steps are as follows -
 

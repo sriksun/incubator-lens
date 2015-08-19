@@ -19,49 +19,59 @@
 package org.apache.lens.cube.parse;
 
 import java.util.Collection;
+import java.util.Set;
 
 import org.apache.lens.cube.metadata.AbstractCubeTable;
 
 /**
  * Candidate table interface
- * 
  */
-interface CandidateTable {
+public interface CandidateTable {
 
   /**
    * Get storage string of the base table alias passed
-   * 
+   *
    * @param alias
-   * 
    * @return storage string
    */
-  public String getStorageString(String alias);
+  String getStorageString(String alias);
+
+  /**
+   * Get storage tables corresponding to this candidate
+   * @return
+   */
+  Set<String> getStorageTables();
 
   /**
    * Get candidate table
-   * 
+   *
    * @return Candidate fact or dim table
    */
-  public AbstractCubeTable getTable();
+  AbstractCubeTable getTable();
 
   /**
    * Get base table of the candidate table
-   * 
+   *
    * @return Cube or DerivedCube or Dimesions
    */
-  public AbstractCubeTable getBaseTable();
+  AbstractCubeTable getBaseTable();
 
   /**
    * Get name of the candidate table
-   * 
+   *
    * @return name
    */
-  public String getName();
+  String getName();
 
   /**
    * Get columns of candidate table
-   * 
+   *
    * @return set or list of columns
    */
-  public Collection<String> getColumns();
+  Collection<String> getColumns();
+
+  /**
+   * Get partitions queried
+   */
+  Set<?> getPartsQueried();
 }

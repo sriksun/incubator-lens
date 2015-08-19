@@ -18,19 +18,23 @@
  */
 package org.apache.lens.server;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.apache.lens.server.model.LogSegregationContext;
+import org.apache.lens.server.model.MappedDiagnosticLogSegregationContext;
+
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.ql.metadata.Hive;
-import org.testng.Assert;
-import org.testng.annotations.Test;
 
+import org.testng.Assert;
+
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class TestStartupOnMetastoreDown {
-  private static Log LOG = LogFactory.getLog(TestStartupOnMetastoreDown.class);
+  private final LogSegregationContext logSegregationContext = new MappedDiagnosticLogSegregationContext();
 
   // @Test
   public void testServicesStartOnMetastoreDown() throws Exception {
-    LensServices services = new LensServices(LensServices.LENS_SERVICES_NAME);
+    LensServices services = new LensServices(LensServices.LENS_SERVICES_NAME, logSegregationContext);
     HiveConf hiveConf = new HiveConf();
 
     // Set metastore uri to an invalid location
@@ -41,12 +45,12 @@ public class TestStartupOnMetastoreDown {
       Assert.fail("Expected init to fail because of invalid metastore config");
     } catch (Throwable th) {
       Assert.assertTrue(th.getMessage().contains(
-          "Unable to instantiate org.apache.hadoop.hive.metastore.HiveMetaStoreClient"));
+        "Unable to instantiate org.apache.hadoop.hive.metastore.HiveMetaStoreClient"));
     } finally {
       try {
         services.stop();
       } catch (Exception exc) {
-        LOG.error("Error stopping services", exc);
+        log.error("Error stopping services", exc);
         Assert.fail("services.stop() got unexpected exception " + exc);
       }
       Hive.closeCurrent();

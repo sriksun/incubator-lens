@@ -21,14 +21,19 @@ package org.apache.lens.cube.parse;
 
 import java.io.IOException;
 
+import org.apache.lens.api.error.ErrorCollection;
+import org.apache.lens.api.error.ErrorCollectionFactory;
+import org.apache.lens.api.error.LensError;
+import org.apache.lens.server.api.error.LensException;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.ql.parse.ParseException;
-import org.apache.hadoop.hive.ql.parse.SemanticException;
 import org.apache.hadoop.hive.ql.session.SessionState;
 
 import org.codehaus.jackson.map.ObjectMapper;
 import org.codehaus.jackson.type.TypeReference;
+
 import org.testng.Assert;
 import org.testng.annotations.AfterSuite;
 import org.testng.annotations.BeforeClass;
@@ -40,7 +45,17 @@ import lombok.extern.slf4j.Slf4j;
 public abstract class TestQueryRewrite {
 
   private static CubeTestSetup setup;
-  private static HiveConf hconf = new HiveConf(TestJoinResolver.class);
+  private static HiveConf hconf = new HiveConf(TestQueryRewrite.class);
+
+  public Configuration getConf() {
+    return hconf;
+  }
+
+  public Configuration getConfWithStorages(String storages) {
+    Configuration conf = new Configuration(getConf());
+    conf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, storages);
+    return conf;
+  }
 
   @BeforeSuite
   public static void setup() throws Exception {
@@ -60,37 +75,58 @@ public abstract class TestQueryRewrite {
     SessionState.get().setCurrentDatabase(TestQueryRewrite.class.getSimpleName());
   }
 
-  protected String rewrite(String query, Configuration conf) throws SemanticException, ParseException {
+  protected String rewrite(String query, Configuration conf) throws LensException, ParseException {
     String rewrittenQuery = rewriteCtx(query, conf).toHQL();
     log.info("Rewritten query: {}", rewrittenQuery);
     return rewrittenQuery;
   }
 
-  protected CubeQueryContext rewriteCtx(String query, Configuration conf) throws SemanticException, ParseException {
+  protected CubeQueryContext rewriteCtx(String query, Configuration conf)
+    throws LensException, ParseException {
     log.info("User query: {}", query);
-    CubeQueryRewriter driver = new CubeQueryRewriter(new HiveConf(conf, HiveConf.class));
+    CubeQueryRewriter driver = new CubeQueryRewriter(conf, hconf);
     return driver.rewrite(query);
   }
 
-  static PruneCauses.BriefAndDetailedError extractPruneCause(SemanticException e) {
+  static PruneCauses.BriefAndDetailedError extractPruneCause(LensException e) throws ClassNotFoundException {
     try {
+      ErrorCollection errorCollection = new ErrorCollectionFactory().createErrorCollection();
+      final LensError lensError = errorCollection.getLensError(e.getErrorCode());
       return new ObjectMapper().readValue(
-        e.getMessage().substring(e.getMessage().indexOf("{"), e.getMessage().length()),
+          e.getFormattedErrorMsg(lensError).substring(e.getFormattedErrorMsg(lensError)
+              .indexOf("{"),  e.getFormattedErrorMsg(lensError).length()),
         new TypeReference<PruneCauses.BriefAndDetailedError>() {});
     } catch (IOException e1) {
       throw new RuntimeException("!!!");
     }
   }
 
-  protected SemanticException getSemanticExceptionInRewrite(String query, Configuration conf) throws ParseException {
+  protected LensException getLensExceptionInRewrite(String query, Configuration conf)
+    throws LensException, ParseException {
     try {
-      rewrite(query, conf);
-      Assert.fail("Should have thrown exception");
+      String hql = rewrite(query, conf);
+      Assert.fail("Should have thrown exception. But rewrote the query : " + hql);
       // unreachable
       return null;
-    } catch (SemanticException e) {
-      e.printStackTrace();
+    } catch (LensException e) {
+      log.error("Lens exception in Rewrite.", e);
       return e;
     }
   }
+
+  protected String getLensExceptionErrorMessageInRewrite(String query, Configuration conf) throws LensException,
+      ParseException, ClassNotFoundException {
+    try {
+      String hql = rewrite(query, conf);
+      Assert.fail("Should have thrown exception. But rewrote the query : " + hql);
+      // unreachable
+      return null;
+    } catch (LensException e) {
+      ErrorCollection errorCollection = new ErrorCollectionFactory().createErrorCollection();
+      final LensError lensError = errorCollection.getLensError(e.getErrorCode());
+      log.error("Lens exception in Rewrite.", e);
+      return e.getFormattedErrorMsg(lensError);
+    }
+  }
+
 }

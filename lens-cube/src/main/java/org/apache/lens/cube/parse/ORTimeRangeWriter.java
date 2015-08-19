@@ -22,6 +22,8 @@ package org.apache.lens.cube.parse;
 import java.util.Iterator;
 import java.util.Set;
 
+import org.apache.lens.cube.metadata.FactPartition;
+
 /**
  * Writes timerange partitions as an OR expression.
  */
@@ -29,7 +31,7 @@ public class ORTimeRangeWriter implements TimeRangeWriter {
 
   @Override
   public String getTimeRangeWhereClause(CubeQueryContext cubeQueryContext, String tableName,
-      Set<FactPartition> rangeParts) {
+    Set<FactPartition> rangeParts) {
     if (rangeParts.size() == 0) {
       return "";
     }

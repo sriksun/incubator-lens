@@ -41,7 +41,7 @@ public class LensPromptProvider extends DefaultPromptProvider {
    * @see org.springframework.shell.plugin.support.DefaultPromptProvider#name()
    */
   @Override
-  public String name() {
+  public String getProviderName() {
     return "lens prompt provider";
   }
 }

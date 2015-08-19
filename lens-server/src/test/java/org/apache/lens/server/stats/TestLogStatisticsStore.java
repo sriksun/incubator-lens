@@ -18,18 +18,25 @@
  */
 package org.apache.lens.server.stats;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hive.ql.metadata.Table;
+import java.io.ByteArrayOutputStream;
+
+import org.apache.lens.server.LensServerConf;
 import org.apache.lens.server.stats.event.LoggableLensStatistics;
 import org.apache.lens.server.stats.store.log.LogStatisticsStore;
 import org.apache.lens.server.stats.store.log.StatisticsLogLayout;
-import org.apache.log4j.Logger;
-import org.apache.log4j.WriterAppender;
+
+import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.ql.metadata.Table;
+
+import org.slf4j.LoggerFactory;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
-import java.io.StringWriter;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.OutputStreamAppender;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * The Class TestLogStatisticsStore.
@@ -45,8 +52,7 @@ public class TestLogStatisticsStore {
     /**
      * Instantiates a new my loggable lens.
      *
-     * @param eventTime
-     *          the event time
+     * @param eventTime the event time
      */
     public MyLoggableLens(long eventTime) {
       super(eventTime);
@@ -54,11 +60,11 @@ public class TestLogStatisticsStore {
 
     /*
      * (non-Javadoc)
-     * 
+     *
      * @see org.apache.lens.server.stats.event.LoggableLensStatistics#getHiveTable(org.apache.hadoop.conf.Configuration)
      */
     @Override
-    public Table getHiveTable(Configuration conf) {
+    public Table getHiveTable(HiveConf conf) {
       return null;
     }
 
@@ -71,26 +77,30 @@ public class TestLogStatisticsStore {
   /**
    * Test log statistics store.
    *
-   * @throws Exception
-   *           the exception
+   * @throws Exception the exception
    */
   @Test
   public void testLogStatisticsStore() throws Exception {
     LogStatisticsStore store = new LogStatisticsStore();
-    store.initialize(new Configuration());
+    store.initialize(LensServerConf.getHiveConf());
     // Do some initialization work
-    StringWriter writer = new StringWriter();
-    Logger l = Logger.getLogger(MyLoggableLens.class);
-    WriterAppender appender = new WriterAppender(new StatisticsLogLayout(), writer);
-
-    appender.setName(MyLoggableLens.class.getSimpleName());
+    ByteArrayOutputStream writer = new ByteArrayOutputStream();
+    Logger l = (Logger) LoggerFactory.getLogger(MyLoggableLens.class);
+    OutputStreamAppender<ILoggingEvent> appender = new OutputStreamAppender<ILoggingEvent>();
+    appender.setLayout(new StatisticsLogLayout());
+    appender.setContext(l.getLoggerContext());
+    appender.setOutputStream(writer);
+    appender.setName(MyLoggableLens.class.getCanonicalName());
+    appender.start();
     l.addAppender(appender);
     MyLoggableLens sampleEvent = new MyLoggableLens(System.currentTimeMillis());
     store.process(sampleEvent);
     writer.flush();
-    l.removeAppender(appender);
+    l.detachAppender(appender);
+    appender.stop();
     ObjectMapper mapper = new ObjectMapper();
     String expected = mapper.writeValueAsString(sampleEvent);
-    Assert.assertEquals(writer.toString().trim(), expected.trim());
+    Assert.assertEquals(new String(writer.toByteArray(), "UTF-8").trim(), expected.trim());
+    writer.close();
   }
 }

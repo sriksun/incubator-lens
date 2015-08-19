@@ -18,30 +18,35 @@
  */
 package org.apache.lens.server.stats.store.log;
 
-import lombok.Setter;
-
-import org.apache.lens.api.LensException;
-import org.apache.lens.server.LensServices;
-import org.apache.lens.server.api.events.LensEventService;
-import org.apache.lens.server.api.metrics.MetricsService;
-import org.apache.log4j.FileAppender;
-import org.apache.log4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.File;
 import java.io.FilenameFilter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TimerTask;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.apache.lens.server.LensServices;
+import org.apache.lens.server.api.error.LensException;
+import org.apache.lens.server.api.events.LensEventService;
+import org.apache.lens.server.api.metrics.MetricsService;
+import org.apache.lens.server.model.LogSegregationContext;
+
+import org.slf4j.LoggerFactory;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.FileAppender;
+
+import lombok.NonNull;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Timer class for monitoring log file rollup.
  */
+@Slf4j
 public class StatisticsLogFileScannerTask extends TimerTask {
-
-  /** The Constant LOG. */
-  private static final org.slf4j.Logger LOG = LoggerFactory.getLogger(StatisticsLogFileScannerTask.class);
 
   /** The Constant LOG_SCANNER_ERRORS. */
   public static final String LOG_SCANNER_ERRORS = "log-scanner-errors";
@@ -56,14 +61,23 @@ public class StatisticsLogFileScannerTask extends TimerTask {
   /** The class set. */
   private Map<String, String> classSet = new ConcurrentHashMap<String, String>();
 
+  private final LogSegregationContext logSegregationContext;
+
+  public StatisticsLogFileScannerTask(@NonNull final LogSegregationContext logSegregationContext) {
+    this.logSegregationContext = logSegregationContext;
+  }
   /*
    * (non-Javadoc)
-   * 
+   *
    * @see java.util.TimerTask#run()
    */
   @Override
   public void run() {
     try {
+
+      final String runId = UUID.randomUUID().toString();
+      this.logSegregationContext.setLogSegregationId(runId);
+
       for (Map.Entry<String, String> entry : scanSet.entrySet()) {
         File f = new File(entry.getValue()).getAbsoluteFile();
         String fileName = f.getAbsolutePath();
@@ -74,23 +88,21 @@ public class StatisticsLogFileScannerTask extends TimerTask {
         try {
           service.notifyEvent(event);
         } catch (LensException e) {
-          LOG.warn("Unable to Notify partition event" + event.getEventName() + " with map  " + event.getPartMap());
+          log.warn("Unable to Notify partition event {} with map {}", event.getEventName(), event.getPartMap());
         }
       }
     } catch (Exception exc) {
-      MetricsService svc = (MetricsService) LensServices.get().getService(MetricsService.NAME);
+      MetricsService svc = LensServices.get().getService(MetricsService.NAME);
       svc.incrCounter(StatisticsLogFileScannerTask.class, LOG_SCANNER_ERRORS);
-      LOG.error("Unknown error in log file scanner ", exc);
+      log.error("Unknown error in log file scanner ", exc);
     }
   }
 
   /**
    * Gets the part map.
    *
-   * @param fileName
-   *          the file name
-   * @param latestLogFiles
-   *          the latest log files
+   * @param fileName       the file name
+   * @param latestLogFiles the latest log files
    * @return the part map
    */
   private HashMap<String, String> getPartMap(String fileName, File[] latestLogFiles) {
@@ -104,8 +116,7 @@ public class StatisticsLogFileScannerTask extends TimerTask {
   /**
    * Gets the latest log file.
    *
-   * @param value
-   *          the value
+   * @param value the value
    * @return the latest log file
    */
   private File[] getLatestLogFile(String value) {
@@ -123,20 +134,19 @@ public class StatisticsLogFileScannerTask extends TimerTask {
   /**
    * Adds the log file.
    *
-   * @param event
-   *          the event
+   * @param event the event
    */
   public void addLogFile(String event) {
     if (scanSet.containsKey(event)) {
       return;
     }
     String appenderName = event.substring(event.lastIndexOf(".") + 1, event.length());
-    Logger log = Logger.getLogger(event);
-    if (log.getAppender(appenderName) == null) {
-      LOG.error("Unable to find " + "statistics log appender for  " + event + " with appender name " + appenderName);
+    Logger logger = (Logger) LoggerFactory.getLogger(event);
+    if (logger.getAppender(appenderName) == null) {
+      log.error("Unable to find statistics log appender for {}  with appender name {}", event, appenderName);
       return;
     }
-    String location = ((FileAppender) log.getAppender(appenderName)).getFile();
+    String location = ((FileAppender<ILoggingEvent>) logger.getAppender(appenderName)).getFile();
     scanSet.put(appenderName, location);
     classSet.put(appenderName, event);
   }

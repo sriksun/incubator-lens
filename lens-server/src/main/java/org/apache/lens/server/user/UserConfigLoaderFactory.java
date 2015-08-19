@@ -18,15 +18,27 @@
  */
 package org.apache.lens.server.user;
 
-import org.apache.hadoop.hive.conf.HiveConf;
-import org.apache.lens.server.api.LensConfConstants;
+import static org.apache.lens.server.api.LensConfConstants.USER_RESOLVER_CUSTOM_CLASS;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.Map;
+
+import org.apache.lens.server.api.LensConfConstants;
+import org.apache.lens.server.api.user.UserConfigLoader;
+import org.apache.lens.server.api.user.UserConfigLoaderException;
+
+import org.apache.hadoop.hive.conf.HiveConf;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * A factory for creating UserConfigLoader objects.
  */
-public class UserConfigLoaderFactory {
+@Slf4j
+public final class UserConfigLoaderFactory {
+  private UserConfigLoaderFactory() {
+
+  }
 
   /** The conf. */
   private static HiveConf conf;
@@ -37,18 +49,17 @@ public class UserConfigLoaderFactory {
   /**
    * Inits the.
    *
-   * @param c
-   *          the c
+   * @param c the c
    */
   public static void init(HiveConf c) {
     conf = c;
-    userConfigLoader = initializeUserConfigLoader();
+    userConfigLoader = null;
   }
 
   /**
    * The Enum RESOLVER_TYPE.
    */
-  public static enum RESOLVER_TYPE {
+  public enum RESOLVER_TYPE {
 
     /** The fixed. */
     FIXED,
@@ -66,6 +77,13 @@ public class UserConfigLoaderFactory {
     CUSTOM
   }
 
+  public static UserConfigLoader getUserConfigLoader() {
+    if (userConfigLoader == null) {
+      userConfigLoader = initializeUserConfigLoader();
+    }
+    return userConfigLoader;
+  }
+
   /**
    * Initialize user config loader.
    *
@@ -78,7 +96,7 @@ public class UserConfigLoaderFactory {
     }
     for (RESOLVER_TYPE type : RESOLVER_TYPE.values()) {
       if (type.name().equals(resolverType)) {
-        return getQueryUserResolver(type);
+        return createUserConfigLoader(type);
       }
     }
     throw new UserConfigLoaderException("user resolver type not determined. provided value: " + resolverType);
@@ -87,11 +105,10 @@ public class UserConfigLoaderFactory {
   /**
    * Gets the query user resolver.
    *
-   * @param resolverType
-   *          the resolver type
+   * @param resolverType the resolver type
    * @return the query user resolver
    */
-  public static UserConfigLoader getQueryUserResolver(RESOLVER_TYPE resolverType) {
+  public static UserConfigLoader createUserConfigLoader(RESOLVER_TYPE resolverType) {
     switch (resolverType) {
     case PROPERTYBASED:
       return new PropertyBasedUserConfigLoader(conf);
@@ -100,7 +117,12 @@ public class UserConfigLoaderFactory {
     case LDAP_BACKED_DATABASE:
       return new LDAPBackedDatabaseUserConfigLoader(conf);
     case CUSTOM:
-      return new CustomUserConfigLoader(conf);
+      try {
+        return (conf.getClass(USER_RESOLVER_CUSTOM_CLASS, UserConfigLoader.class, UserConfigLoader.class))
+          .getConstructor(HiveConf.class).newInstance(conf);
+      } catch (InvocationTargetException | NoSuchMethodException | IllegalAccessException | InstantiationException e) {
+        throw new UserConfigLoaderException(e);
+      }
     case FIXED:
     default:
       return new FixedUserConfigLoader(conf);
@@ -110,11 +132,19 @@ public class UserConfigLoaderFactory {
   /**
    * Gets the user config.
    *
-   * @param loggedInUser
-   *          the logged in user
+   * @param loggedInUser the logged in user
    * @return the user config
    */
   public static Map<String, String> getUserConfig(String loggedInUser) {
-    return userConfigLoader.getUserConfig(loggedInUser);
+    try {
+      Map<String, String> config = getUserConfigLoader().getUserConfig(loggedInUser);
+      if (config == null) {
+        throw new UserConfigLoaderException("Got null User config for: " + loggedInUser);
+      }
+      return config;
+    } catch (RuntimeException e) {
+      log.error("Couldn't get user config for user: " + loggedInUser, e);
+      throw e;
+    }
   }
 }

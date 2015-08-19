@@ -33,6 +33,7 @@ public final class JDBCDriverConfConstants {
 
   /** The Constant JDBC_QUERY_REWRITER_CLASS. */
   public static final String JDBC_QUERY_REWRITER_CLASS = JDBC_DRIVER_PFX + "query.rewriter";
+  public static final String JDBC_QUERY_HOOK_CLASS = JDBC_DRIVER_PFX + "query.hook.class";
 
   /** The Constant JDBC_DRIVER_CLASS. */
   public static final String JDBC_DRIVER_CLASS = JDBC_DRIVER_PFX + "driver.class";
@@ -82,10 +83,22 @@ public final class JDBCDriverConfConstants {
   /** The Constant DEFAULT_JDBC_EXPLAIN_KEYWORD_BEFORE_SELECT. */
   public static final boolean DEFAULT_JDBC_EXPLAIN_KEYWORD_BEFORE_SELECT = true;
 
+  /** The Constant JDBC_VALIDATE_THROUGH_PREPARE. */
+  public static final String JDBC_VALIDATE_THROUGH_PREPARE = JDBC_DRIVER_PFX + "validate.through.prepare";
+
+  /** The Constant DEFAULT_JDBC_VALIDATE_THROUGH_PREPARE. */
+  public static final boolean DEFAULT_JDBC_VALIDATE_THROUGH_PREPARE = true;
+
   public static final String JDBC_ENABLE_RESULTSET_STREAMING_RETRIEVAL =
     JDBC_DRIVER_PFX + "enable.resultset.streaming.retrieval";
   public static final boolean DEFAULT_JDBC_ENABLE_RESULTSET_STREAMING_RETRIEVAL = false;
 
   public static final String JDBC_FETCH_SIZE = JDBC_DRIVER_PFX + "fetch.size";
   public static final int DEFAULT_JDBC_FETCH_SIZE = 1000;
+
+  public static final String QUERY_LAUNCHING_CONSTRAINT_FACTORIES_KEY = JDBC_DRIVER_PFX
+    + "query.launching.constraint.factories";
+
+  public static final String WAITING_QUERIES_SELECTION_POLICY_FACTORIES_KEY = JDBC_DRIVER_PFX
+      + "waiting.queries.selection.policy.factories";
 }

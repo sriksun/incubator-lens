@@ -18,16 +18,14 @@
  */
 package org.apache.lens.cube.parse;
 
-import org.apache.hadoop.hive.ql.parse.SemanticException;
+import org.apache.lens.server.api.error.LensException;
 
 interface ContextRewriter {
   /**
    * Rewrites and updates {@link CubeQueryContext}
-   * 
-   * @param cubeql
-   *          CubeQueryContext
-   * 
-   * @throws SemanticException
+   *
+   * @param cubeql CubeQueryContext
+   * @throws LensException
    */
-  public void rewriteContext(CubeQueryContext cubeql) throws SemanticException;
+  void rewriteContext(CubeQueryContext cubeql) throws LensException;
 }

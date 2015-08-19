@@ -17,13 +17,22 @@
 
 FROM inmobi/docker-hive
 
-ENV LENS_VERSION apache-lens-2.0.0-incubating-SNAPSHOT
+RUN wget http://apache.mirrors.lucidnetworks.net/spark/spark-1.3.0/spark-1.3.0-bin-hadoop2.4.tgz
+RUN gunzip spark-1.3.0-bin-hadoop2.4.tgz
+RUN tar -xvf spark-1.3.0-bin-hadoop2.4.tar
+RUN mv spark-1.3.0-bin-hadoop2.4 /usr/local
+ENV SPARK_HOME /usr/local/spark-1.3.0-bin-hadoop2.4
+RUN rm spark-1.3.0-bin-hadoop2.4.tar
+
+ENV LENS_VERSION 2.4.0-beta-incubating-SNAPSHOT
 ENV BASEDIR /opt/lens
-ENV LENS_HOME $BASEDIR/lens-dist/target/${LENS_VERSION}-bin/${LENS_VERSION}-bin/server
-ENV LENS_CLIENT $BASEDIR/lens-dist/target/${LENS_VERSION}-bin/${LENS_VERSION}-bin/client
+ENV LENS_HOME $BASEDIR/lens-dist/target/apache-lens-${LENS_VERSION}-bin/apache-lens-${LENS_VERSION}-bin/server
+ENV LENS_CLIENT $BASEDIR/lens-dist/target/apache-lens-${LENS_VERSION}-bin/apache-lens-${LENS_VERSION}-bin/client
 
 ENV LENS_SERVER_CONF $LENS_HOME/conf-pseudo-distr/
 ENV LENS_CLIENT_CONF $LENS_CLIENT/conf-pseudo-distr/
+
+ENV LENS_ML $BASEDIR/lens-ml-dist/target/apache-lens-${LENS_VERSION}-ml/
 
 
 # set permissions for lens bootstrap file

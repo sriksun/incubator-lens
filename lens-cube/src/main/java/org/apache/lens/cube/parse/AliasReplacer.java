@@ -21,54 +21,44 @@ package org.apache.lens.cube.parse;
 import static org.apache.hadoop.hive.ql.parse.HiveParser.Identifier;
 import static org.apache.hadoop.hive.ql.parse.HiveParser.TOK_SELEXPR;
 
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.antlr.runtime.CommonToken;
+import org.apache.lens.cube.error.LensCubeErrorCode;
+import org.apache.lens.cube.metadata.CubeInterface;
+import org.apache.lens.cube.metadata.Dimension;
+import org.apache.lens.server.api.error.LensException;
+
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hive.ql.ErrorMsg;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
-import org.apache.hadoop.hive.ql.parse.SemanticException;
-import org.apache.lens.cube.metadata.AbstractCubeTable;
-import org.apache.lens.cube.metadata.CubeInterface;
-import org.apache.lens.cube.metadata.DerivedCube;
-import org.apache.lens.cube.metadata.Dimension;
-import org.apache.lens.cube.metadata.ReferencedDimAtrribute;
+
+import org.antlr.runtime.CommonToken;
 
 /**
- * Finds queried column to table alias. Finds queried dim attributes and queried
- * measures.
- *
- * Does queried field validation wrt derived cubes, if all fields of queried
- * cube cannot be queried together.
- *
+ * Finds queried column to table alias. Finds queried dim attributes and queried measures.
+ * <p/>
+ * Does queried field validation wrt derived cubes, if all fields of queried cube cannot be queried together.
+ * <p/>
  * Replaces all the columns in all expressions with tablealias.column
  */
 class AliasReplacer implements ContextRewriter {
-
-  private static Log LOG = LogFactory.getLog(AliasReplacer.class.getName());
-
-  // Mapping of a qualified column name to its table alias
-  private Map<String, String> colToTableAlias;
 
   public AliasReplacer(Configuration conf) {
   }
 
   @Override
-  public void rewriteContext(CubeQueryContext cubeql) throws SemanticException {
-    colToTableAlias = new HashMap<String, String>();
+  public void rewriteContext(CubeQueryContext cubeql) throws LensException {
+    Map<String, String> colToTableAlias = cubeql.getColToTableAlias();
 
     extractTabAliasForCol(cubeql);
-    doFieldValidation(cubeql);
+    findDimAttributesAndMeasures(cubeql);
+
+    if (colToTableAlias.isEmpty()) {
+      return;
+    }
 
     // Rewrite the all the columns in the query with table alias prefixed.
     // If col1 of table tab1 is accessed, it would be changed as tab1.col1.
@@ -81,10 +71,6 @@ class AliasReplacer implements ContextRewriter {
     // 2: (TOK_SELECT (TOK_SELEXPR (. (TOK_TABLE_OR_COL src) key))
     // (TOK_SELEXPR (TOK_FUNCTION count (. (TOK_TABLE_OR_COL src) value))))
     // 3: (TOK_SELECT (TOK_SELEXPR (. (TOK_TABLE_OR_COL src) key) srckey))))
-    if (colToTableAlias == null) {
-      return;
-    }
-
     replaceAliases(cubeql.getSelectAST(), 0, colToTableAlias);
 
     replaceAliases(cubeql.getHavingAST(), 0, colToTableAlias);
@@ -97,82 +83,49 @@ class AliasReplacer implements ContextRewriter {
 
     replaceAliases(cubeql.getJoinTree(), 0, colToTableAlias);
 
-
     // Update the aggregate expression set
     AggregateResolver.updateAggregates(cubeql.getSelectAST(), cubeql);
     AggregateResolver.updateAggregates(cubeql.getHavingAST(), cubeql);
     // Update alias map as well
     updateAliasMap(cubeql.getSelectAST(), cubeql);
-
   }
 
-  // Finds all queried dim-attributes and measures from cube
-  // If all fields in cube are not queryable together, does the validation
-  // wrt to dervided cubes.
-  private void doFieldValidation(CubeQueryContext cubeql) throws SemanticException {
+  /**
+   * Figure out queried dim attributes and measures from the cube query context
+   * @param cubeql
+   * @throws LensException
+   */
+  private void findDimAttributesAndMeasures(CubeQueryContext cubeql) throws LensException {
     CubeInterface cube = cubeql.getCube();
     if (cube != null) {
       Set<String> cubeColsQueried = cubeql.getColumnsQueried(cube.getName());
       Set<String> queriedDimAttrs = new HashSet<String>();
       Set<String> queriedMsrs = new HashSet<String>();
+      Set<String> queriedExprs = new HashSet<String>();
       if (cubeColsQueried != null && !cubeColsQueried.isEmpty()) {
         for (String col : cubeColsQueried) {
           if (cube.getMeasureNames().contains(col)) {
             queriedMsrs.add(col);
           } else if (cube.getDimAttributeNames().contains(col)) {
             queriedDimAttrs.add(col);
+          } else if (cube.getExpressionNames().contains(col)) {
+            queriedExprs.add(col);
           }
         }
       }
       cubeql.addQueriedDimAttrs(queriedDimAttrs);
       cubeql.addQueriedMsrs(queriedMsrs);
-      if (!cube.allFieldsQueriable()) {
-        // do queried field validation
-        List<DerivedCube> dcubes;
-        try {
-          dcubes = cubeql.getMetastoreClient().getAllDerivedQueryableCubes(cube);
-        } catch (HiveException e) {
-          throw new SemanticException(e);
-        }
-        // remove chained ref columns from field valdation
-        Iterator<String> iter = queriedDimAttrs.iterator();
-        while (iter.hasNext()) {
-          String attr = iter.next();
-          if (cube.getDimAttributeByName(attr) instanceof ReferencedDimAtrribute
-              && ((ReferencedDimAtrribute)cube.getDimAttributeByName(attr)).isChainedColumn()) {
-            iter.remove();
-          }
-        }
-        // do validation
-        // Find atleast one derived cube which contains all the dimensions
-        // queried.
-        boolean derivedCubeFound = false;
-        for (DerivedCube dcube : dcubes) {
-          if (dcube.getDimAttributeNames().containsAll(queriedDimAttrs)) {
-            // remove all the measures that are covered
-            queriedMsrs.removeAll(dcube.getMeasureNames());
-            derivedCubeFound = true;
-          }
-        }
-        if (!derivedCubeFound && !queriedDimAttrs.isEmpty()) {
-          throw new SemanticException(ErrorMsg.FIELDS_NOT_QUERYABLE, queriedDimAttrs.toString());
-        }
-        if (!queriedMsrs.isEmpty()) {
-          // Add appropriate message to know which fields are not queryable
-          // together
-          if (!queriedDimAttrs.isEmpty()) {
-            throw new SemanticException(ErrorMsg.FIELDS_NOT_QUERYABLE, queriedDimAttrs.toString() + " and "
-              + queriedMsrs.toString());
-          } else {
-            throw new SemanticException(ErrorMsg.FIELDS_NOT_QUERYABLE, queriedMsrs.toString());
-          }
-        }
-      }
+      cubeql.addQueriedExprs(queriedExprs);
     }
   }
 
-  private void extractTabAliasForCol(CubeQueryContext cubeql) throws SemanticException {
-    Set<String> columns = cubeql.getTblAliasToColumns().get(CubeQueryContext.DEFAULT_TABLE);
+  private void extractTabAliasForCol(CubeQueryContext cubeql) throws LensException {
+    extractTabAliasForCol(cubeql, cubeql);
+  }
+
+  static void extractTabAliasForCol(CubeQueryContext cubeql, TrackQueriedColumns tqc) throws LensException {
+    Map<String, String> colToTableAlias = cubeql.getColToTableAlias();
+    Set<String> columns = tqc.getTblAliasToColumns().get(CubeQueryContext.DEFAULT_TABLE);
     if (columns == null) {
       return;
     }
@@ -181,8 +134,9 @@ class AliasReplacer implements ContextRewriter {
       if (cubeql.getCube() != null) {
         Set<String> cols = cubeql.getCube().getAllFieldNames();
         if (cols.contains(col.toLowerCase())) {
-          colToTableAlias.put(col.toLowerCase(), cubeql.getAliasForTabName(cubeql.getCube().getName()));
-          cubeql.addColumnsQueried((AbstractCubeTable) cubeql.getCube(), col.toLowerCase());
+          String cubeAlias = cubeql.getAliasForTableName(cubeql.getCube().getName());
+          colToTableAlias.put(col.toLowerCase(), cubeAlias);
+          tqc.addColumnsQueried(cubeAlias, col.toLowerCase());
           inCube = true;
         }
       }
@@ -191,23 +145,25 @@ class AliasReplacer implements ContextRewriter {
           if (!inCube) {
             String prevDim = colToTableAlias.get(col.toLowerCase());
             if (prevDim != null && !prevDim.equals(dim.getName())) {
-              throw new SemanticException(ErrorMsg.AMBIGOUS_DIM_COLUMN, col, prevDim, dim.getName());
+              throw new LensException(LensCubeErrorCode.AMBIGOUS_DIM_COLUMN.getValue(), col, prevDim, dim.getName());
             }
-            colToTableAlias.put(col.toLowerCase(), cubeql.getAliasForTabName(dim.getName()));
-            cubeql.addColumnsQueried(dim, col.toLowerCase());
+            String dimAlias = cubeql.getAliasForTableName(dim.getName());
+            colToTableAlias.put(col.toLowerCase(), dimAlias);
+            tqc.addColumnsQueried(dimAlias, col.toLowerCase());
           } else {
             // throw error because column is in both cube and dimension table
-            throw new SemanticException(ErrorMsg.AMBIGOUS_CUBE_COLUMN, col, cubeql.getCube().getName(), dim.getName());
+            throw new LensException(LensCubeErrorCode.AMBIGOUS_CUBE_COLUMN.getValue(), col,
+                cubeql.getCube().getName(), dim.getName());
           }
         }
       }
       if (colToTableAlias.get(col.toLowerCase()) == null) {
-        throw new SemanticException(ErrorMsg.COLUMN_NOT_FOUND, col);
+        throw new LensException(LensCubeErrorCode.COLUMN_NOT_FOUND.getValue(), col);
       }
     }
   }
 
-  private void replaceAliases(ASTNode node, int nodePos, Map<String, String> colToTableAlias) {
+  static void replaceAliases(ASTNode node, int nodePos, Map<String, String> colToTableAlias) {
     if (node == null) {
       return;
     }
@@ -256,7 +212,7 @@ class AliasReplacer implements ContextRewriter {
     }
   }
 
-  private void updateAliasMap(ASTNode root, CubeQueryContext cubeql) {
+  static void updateAliasMap(ASTNode root, CubeQueryContext cubeql) {
     if (root == null) {
       return;
     }

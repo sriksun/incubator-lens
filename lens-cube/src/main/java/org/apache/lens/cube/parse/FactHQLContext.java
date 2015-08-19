@@ -21,39 +21,27 @@ package org.apache.lens.cube.parse;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.hive.ql.metadata.HiveException;
-import org.apache.hadoop.hive.ql.parse.SemanticException;
 import org.apache.lens.cube.metadata.Dimension;
+import org.apache.lens.server.api.error.LensException;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
- * HQL context class which passes all query strings from the fact and works with
- * required dimensions for the fact.
- *
+ * HQL context class which passes all query strings from the fact and works with required dimensions for the fact.
  */
+@Slf4j
 public class FactHQLContext extends DimHQLContext {
-
-  public static Log LOG = LogFactory.getLog(FactHQLContext.class.getName());
 
   private final CandidateFact fact;
   private final Set<Dimension> factDims;
 
   FactHQLContext(CandidateFact fact, Map<Dimension, CandidateDim> dimsToQuery, Set<Dimension> factDims,
-      CubeQueryContext query) throws SemanticException {
+    CubeQueryContext query) throws LensException {
     super(query, dimsToQuery, factDims, fact.getSelectTree(), fact.getWhereTree(), fact.getGroupByTree(), null, fact
-        .getHavingTree(), null);
+      .getHavingTree(), null);
     this.fact = fact;
     this.factDims = factDims;
-    LOG.info("factDims:" + factDims + " for fact:" + fact);
-  }
-
-  @Override
-  protected String getPostSelectionWhereClause() throws SemanticException {
-    return StorageUtil.getNotLatestClauseForDimensions(
-      query.getAliasForTabName(query.getCube().getName()),
-      fact.getTimePartCols(),
-      query.getTimeRanges().iterator().next().getPartitionColumn());
+    log.info("factDims:{} for fact:{}", factDims, fact);
   }
 
   @Override
@@ -66,7 +54,7 @@ public class FactHQLContext extends DimHQLContext {
     return fact;
   }
 
-  protected String getFromTable() throws SemanticException {
+  protected String getFromTable() throws LensException {
     return query.getQBFromString(fact, getDimsToQuery());
   }
 
