@@ -38,9 +38,9 @@ import lombok.NonNull;
  * The Class LensDimensionTableCommands.
  */
 @Component
-@UserDocumentation(title = "Commands for Dimension Tables",
+@UserDocumentation(title = "Commands for Dimension Tables Management",
   description = "These commands provide CRUD for dimension tables, associated storages, and fact partitions")
-public class LensDimensionTableCommands extends PhysicalTableCrudCommand<XDimensionTable>
+public class LensDimensionTableCommands extends LogicalTableCrudCommand<XDimensionTable>
   implements CommandMarker {
 
   /**

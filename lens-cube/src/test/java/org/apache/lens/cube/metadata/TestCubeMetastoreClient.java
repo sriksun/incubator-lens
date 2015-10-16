@@ -28,6 +28,7 @@ import org.apache.lens.cube.metadata.ReferencedDimAtrribute.ChainRefCol;
 import org.apache.lens.cube.metadata.timeline.EndsAndHolesPartitionTimeline;
 import org.apache.lens.cube.metadata.timeline.PartitionTimeline;
 import org.apache.lens.cube.metadata.timeline.StoreAllPartitionTimeline;
+import org.apache.lens.cube.metadata.timeline.TestPartitionTimelines;
 import org.apache.lens.cube.parse.TimeRange;
 import org.apache.lens.server.api.error.LensException;
 
@@ -191,7 +192,8 @@ public class TestCubeMetastoreClient {
     locationHierarchy.add(new ReferencedDimAtrribute(new FieldSchema("countryid", "int", "country"), "Country refer",
       new TableReference("countrydim", "id")));
     List<String> regions = Arrays.asList("APAC", "EMEA", "USA");
-    locationHierarchy.add(new InlineDimAttribute(new FieldSchema("regionname", "string", "region"), regions));
+    locationHierarchy.add(new BaseDimAttribute(new FieldSchema("regionname", "string", "region"), "regionname", null,
+      null, null, null, regions));
     cubeDimensions.add(new HierarchicalDimAttribute("location", "location hierarchy", locationHierarchy));
     cubeDimensions.add(new BaseDimAttribute(new FieldSchema("dim1", "string", "basedim")));
     cubeDimensions.add(new ReferencedDimAtrribute(new FieldSchema("dim2", "id", "ref dim"), "Dim2 refer",
@@ -231,8 +233,8 @@ public class TestCubeMetastoreClient {
       "state refer2", new TableReference("statedim", "id"), now, null, 100.0));
     locationHierarchyWithStartTime.add(new ReferencedDimAtrribute(new FieldSchema("countryid2", "int", "country"),
       "Country refer2", new TableReference("countrydim", "id"), null, null, null));
-    locationHierarchyWithStartTime.add(new InlineDimAttribute(new FieldSchema("regionname2", "string", "region"),
-      regions));
+    locationHierarchyWithStartTime.add(new BaseDimAttribute(new FieldSchema("regionname2", "string", "region"),
+      "regionname2", null, null, null, null, regions));
 
     cubeDimensions
       .add(new HierarchicalDimAttribute("location2", "localtion hierarchy2", locationHierarchyWithStartTime));
@@ -251,9 +253,10 @@ public class TestCubeMetastoreClient {
     cubeDimensions.add(new ReferencedDimAtrribute(new FieldSchema("dim3start", "string", "multi ref dim"),
       "Dim3 with starttime", multiRefs, now, null, 100.0));
 
-    cubeDimensions.add(new InlineDimAttribute(new FieldSchema("region", "string", "region dim"), regions));
-    cubeDimensions.add(new InlineDimAttribute(new FieldSchema("regionstart", "string", "region dim"),
-      "Region with starttime", now, null, 100.0, regions));
+    cubeDimensions.add(new BaseDimAttribute(new FieldSchema("region", "string", "region dim"), "region", null, null,
+      null, null, regions));
+    cubeDimensions.add(new BaseDimAttribute(new FieldSchema("regionstart", "string", "region dim"),
+      "Region with starttime", now, null, 100.0, null, regions));
     JoinChain zipCity = new JoinChain("cityFromZip", "Zip City", "zip city desc");
     List<TableReference> chain = new ArrayList<TableReference>();
     chain.add(new TableReference(cubeName, "zipcode"));
@@ -1445,26 +1448,12 @@ public class TestCubeMetastoreClient {
   private void assertSameTimelines(String factName, String[] storages, UpdatePeriod updatePeriod, String[] partCols)
     throws HiveException, LensException {
     for (String partCol : partCols) {
-      PartitionTimeline[] timelines = new PartitionTimeline[storages.length];
+      ArrayList<PartitionTimeline> timelines = Lists.newArrayList();
       for (int i = 0; i < storages.length; i++) {
-        timelines[i] = client.partitionTimelineCache.get(factName, storages[i], updatePeriod, partCol);
+        timelines.add(client.partitionTimelineCache.get(factName, storages[i], updatePeriod, partCol));
       }
-      for (int i = 0; i < timelines.length; i++) {
-        for (int j = i + 1; j < timelines.length; j++) {
-          assertSameTimelines(timelines[i], timelines[j]);
-        }
-      }
+      TestPartitionTimelines.assertSameTimelines(timelines);
     }
-  }
-
-  private void assertSameTimelines(PartitionTimeline timeline1, PartitionTimeline timeline2) {
-    Iterator<TimePartition> iter1 = timeline1.iterator();
-    Iterator<TimePartition> iter2 = timeline2.iterator();
-    while (iter1.hasNext()) {
-      Assert.assertTrue(iter2.hasNext());
-      assertEquals(iter1.next(), iter2.next());
-    }
-    Assert.assertFalse(iter2.hasNext());
   }
 
   private StoragePartitionDesc getStoragePartSpec(String cubeFactName, UpdatePeriod updatePeriod,

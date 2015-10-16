@@ -403,6 +403,11 @@ public final class LensConfConstants {
   public static final String NATIVE_TABLE_NAME = METASTORE_PFX + "native.table.name";
 
   /**
+   * The property name for setting the column mapping, if column names in native table are different
+   */
+  public static final String NATIVE_TABLE_COLUMN_MAPPING = METASTORE_PFX + "native.table.column.mapping";
+
+  /**
    * The Constant ES_INDEX_NAME.
    */
   public static final String ES_INDEX_NAME = METASTORE_PFX + "es.index.name";
@@ -726,7 +731,7 @@ public final class LensConfConstants {
    * Interval at which lens session expiry service runs
    */
   public static final String SESSION_EXPIRY_SERVICE_INTERVAL_IN_SECS = SERVER_PFX
-    + "session.expiry.serivce.interval.secs";
+    + "session.expiry.service.interval.secs";
 
   public static final int DEFAULT_SESSION_EXPIRY_SERVICE_INTERVAL_IN_SECS = 3600;
 
@@ -769,14 +774,14 @@ public final class LensConfConstants {
   // Query Purge Configuration
 
   /**
-   * The Constant MAX_NUMBER_OF_FINISHED_QUERY.
+   * The Constant PURGE_INTERVAL.
    */
-  public static final String MAX_NUMBER_OF_FINISHED_QUERY = SERVER_PFX + "max.finished.queries";
+  public static final String PURGE_INTERVAL = SERVER_PFX + "querypurger.sleep.interval";
 
   /**
-   * The Constant DEFAULT_FINISHED_QUERIES.
+   * The Constant DEFAULT_PURGE_INTERVAL.
    */
-  public static final int DEFAULT_FINISHED_QUERIES = 100;
+  public static final int DEFAULT_PURGE_INTERVAL = 10000;
 
   // Server DB configuration
   /**
@@ -921,4 +926,20 @@ public final class LensConfConstants {
    */
   public static final String WAITING_QUERIES_SELECTION_POLICY_FACTORIES_KEY = SERVER_PFX
       + "waiting.queries.selection.policy.factories";
+
+  /**
+   * Key denoting the dialect class property of saved query service.
+   */
+  public static final String JDBC_DIALECT_PROVIDER_CLASS_KEY = "lens.server.savedquery.jdbc.dialectclass";
+
+  /**
+   * Key denoting the default fetch value of saved query list api.
+   */
+  public static final String FETCH_COUNT_SAVED_QUERY_LIST_KEY = "lens.server.savedquery.list.default.count";
+
+  /**
+   * Default fetch count of saved query list api.
+   */
+  public static final int DEFAULT_FETCH_COUNT_SAVED_QUERY_LIST = 20;
+
 }

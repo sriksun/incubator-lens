@@ -19,8 +19,7 @@
   under the License.
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
@@ -88,7 +87,7 @@
     <!-- test -->
     <testng.version>6.8</testng.version>
     <mockito.version>1.9.5</mockito.version>
-    <powermock.version>1.4.12</powermock.version>
+    <powermock.version>1.5.6</powermock.version>
 
     <!-- maven plugins -->
     <jaxb2.plugin.version>0.12.3</jaxb2.plugin.version>
@@ -108,6 +107,11 @@
     <antrun.plugin.version>1.8</antrun.plugin.version>
     <cobertura.plugin.version>2.7</cobertura.plugin.version>
 
+    <!-- UI -->
+    <nodejs.plugin.version>1.0.0</nodejs.plugin.version>
+    <nodeVersion>0.10.32</nodeVersion>
+    <npmVersion>1.4.9</npmVersion>
+
     <!-- debian -->
     <mvn.deb.build.dir>${project.build.directory}/debian</mvn.deb.build.dir>
 
@@ -121,11 +125,11 @@
 
   <groupId>org.apache.lens</groupId>
   <artifactId>apache-lens</artifactId>
-  <version>2.4.0-beta-incubating-SNAPSHOT</version>
+  <version>2.5.0-beta-SNAPSHOT</version>
   <name>Lens</name>
   <packaging>pom</packaging>
   <description>Unified Analytics Platform</description>
-  <url>http://lens.incubator.apache.org</url>
+  <url>http://lens.apache.org</url>
   <inceptionYear>2014</inceptionYear>
   <licenses>
     <license>
@@ -152,30 +156,30 @@
   <distributionManagement>
     <site>
       <id>lens-site</id>
-      <url>http://lens.incubator.apache.org/</url>
+      <url>http://lens.apache.org/</url>
     </site>
   </distributionManagement>
 
   <mailingLists>
     <mailingList>
       <name>lens-user</name>
-      <subscribe>user-subscribe@lens.incubator.apache.org</subscribe>
-      <unsubscribe>user-unsubscribe@lens.incubator.apache.org</unsubscribe>
-      <post>user@lens.incubator.apache.org</post>
+      <subscribe>user-subscribe@lens.apache.org</subscribe>
+      <unsubscribe>user-unsubscribe@lens.apache.org</unsubscribe>
+      <post>user@lens.apache.org</post>
       <archive>http://mail-archives.apache.org/mod_mbox/lens-user/</archive>
     </mailingList>
     <mailingList>
       <name>lens-dev</name>
-      <subscribe>dev-subscribe@lens.incubator.apache.org</subscribe>
-      <unsubscribe>dev-unsubscribe@lens.incubator.apache.org</unsubscribe>
-      <post>dev@lens.incubator.apache.org</post>
+      <subscribe>dev-subscribe@lens.apache.org</subscribe>
+      <unsubscribe>dev-unsubscribe@lens.apache.org</unsubscribe>
+      <post>dev@lens.apache.org</post>
       <archive>http://mail-archives.apache.org/mod_mbox/lens-dev/</archive>
     </mailingList>
     <mailingList>
       <name>lens-commits</name>
-      <subscribe>commits-subscribe@lens.incubator.apache.org</subscribe>
-      <unsubscribe>commits-unsubscribe@lens.incubator.apache.org</unsubscribe>
-      <post>commits@lens.incubator.apache.org</post>
+      <subscribe>commits-subscribe@lens.apache.org</subscribe>
+      <unsubscribe>commits-unsubscribe@lens.apache.org</unsubscribe>
+      <post>commits@lens.apache.org</post>
       <archive>http://mail-archives.apache.org/mod_mbox/lens-commits/</archive>
     </mailingList>
   </mailingLists>
@@ -322,9 +326,9 @@
     </developer>
   </developers>
   <scm>
-    <connection>scm:git:https://git-wip-us.apache.org/repos/asf/incubator-lens.git</connection>
-    <developerConnection>scm:git:https://git-wip-us.apache.org/repos/asf/incubator-lens.git</developerConnection>
-    <url>https://git-wip-us.apache.org/repos/asf/incubator-lens.git</url>
+    <connection>scm:git:https://git-wip-us.apache.org/repos/asf/lens.git</connection>
+    <developerConnection>scm:git:https://git-wip-us.apache.org/repos/asf/lens.git</developerConnection>
+    <url>https://git-wip-us.apache.org/repos/asf/lens.git</url>
     <tag>HEAD</tag>
   </scm>
 
@@ -521,6 +525,21 @@
           <artifactId>findbugs-maven-plugin</artifactId>
           <version>${findbugs.plugin.version}</version>
         </plugin>
+        <plugin>
+          <groupId>io.wcm.maven.plugins</groupId>
+          <artifactId>nodejs-maven-plugin</artifactId>
+          <version>${nodejs.plugin.version}</version>
+          <configuration>
+            <npmVersion>${npmVersion}</npmVersion>
+            <nodeJsVersion>${nodeVersion}</nodeJsVersion>
+            <nodeJsDirectory>${project.basedir}/node</nodeJsDirectory>
+            <tasks>
+              <npmInstallTask>
+                <workingDirectory>${project.basedir}</workingDirectory>
+              </npmInstallTask>
+            </tasks>
+          </configuration>
+        </plugin>
       </plugins>
     </pluginManagement>
     <plugins>
@@ -548,6 +567,8 @@
             <exclude>**/*.iml</exclude>
             <exclude>**/.classpath</exclude>
             <exclude>**/.project</exclude>
+            <exclude>**/node/**</exclude>
+            <exclude>**/node_modules/**</exclude>
             <exclude>**/.checkstyle</exclude>
             <exclude>**/.settings/**</exclude>
             <exclude>**/maven-eclipse.xml</exclude>
@@ -568,6 +589,7 @@
             <exclude>**/codemirror.min.*</exclude>
             <exclude>**/*.js</exclude>
             <exclude>**/*.properties</exclude>
+            <exclude>**/*.json</exclude>
           </excludes>
         </configuration>
         <executions>
@@ -614,7 +636,7 @@
           <dependency>
             <groupId>org.apache.lens</groupId>
             <artifactId>checkstyle</artifactId>
-            <version>2.4.0-beta-incubating-SNAPSHOT</version>
+            <version>2.5.0-beta-SNAPSHOT</version>
           </dependency>
         </dependencies>
         <executions>
@@ -1523,6 +1545,7 @@
     <module>lens-ml-lib</module>
     <module>lens-ml-dist</module>
     <module>lens-regression</module>
+    <module>lens-ui</module>
   </modules>
 
   <profiles>
@@ -1587,7 +1610,7 @@
                   <failOnError>false</failOnError>
                   <tasks>
                     <propertyfile file="target/generated-classes/cobertura/cobertura.properties">
-                      <entry key="net.sourceforge.cobertura.datafile" value="${mvn.lens.install.dir}"/>
+                      <entry key="net.sourceforge.cobertura.datafile" value="${mvn.lens.install.dir}" />
                     </propertyfile>
                   </tasks>
                 </configuration>
@@ -1621,7 +1644,7 @@
               <dependency>
                 <groupId>org.apache.lens</groupId>
                 <artifactId>checkstyle</artifactId>
-                <version>2.4.0-beta-incubating-SNAPSHOT</version>
+                <version>2.5.0-beta-SNAPSHOT</version>
               </dependency>
             </dependencies>
             <executions>

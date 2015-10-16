@@ -80,10 +80,6 @@ public class MetastoreUtil {
     return getDimensionKeyPrefix(dimName) + CLASS_SFX;
   }
 
-  public static String getInlineDimensionSizeKey(String name) {
-    return getDimensionKeyPrefix(name) + INLINE_SIZE_SFX;
-  }
-
   public static String getInlineDimensionValuesKey(String name) {
     return getDimensionKeyPrefix(name) + INLINE_VALUES_SFX;
   }
@@ -134,6 +130,7 @@ public class MetastoreUtil {
     for (int i = 0; i < references.size(); i++) {
       TableReference reference = references.get(i);
       toks[i] = reference.getDestTable() + TABLE_COLUMN_SEPERATOR + reference.getDestColumn();
+      toks[i] += TABLE_COLUMN_SEPERATOR + reference.isMapsToMany();
     }
 
     return StringUtils.join(toks, ',');

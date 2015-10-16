@@ -363,13 +363,15 @@ class StorageTableResolver implements ContextRewriter {
       PartitionRangesForPartitionColumns missingParts = new PartitionRangesForPartitionColumns();
       boolean noPartsForRange = false;
       Set<String> unsupportedTimeDims = Sets.newHashSet();
+      Set<String> partColsQueried = Sets.newHashSet();
       for (TimeRange range : cubeql.getTimeRanges()) {
+        partColsQueried.add(range.getPartitionColumn());
         StringBuilder extraWhereClause = new StringBuilder();
         Set<FactPartition> rangeParts = getPartitions(cfact.fact, range, skipStorageCauses, missingParts);
         // If no partitions were found, then we'll fallback.
         String partCol = range.getPartitionColumn();
         boolean partColNotSupported = rangeParts.isEmpty();
-        for(String storage: cfact.fact.getStorages()) {
+        for (String storage : cfact.fact.getStorages()) {
           String storageTableName = getFactOrDimtableStorageTableName(cfact.fact.getName(), storage).toLowerCase();
           partColNotSupported &= skipStorageCauses.containsKey(storageTableName)
             && skipStorageCauses.get(storageTableName).getCause().equals(PART_COL_DOES_NOT_EXIST)
@@ -389,6 +391,7 @@ class StorageTableResolver implements ContextRewriter {
           if (fallBackRange == null) {
             break;
           }
+          partColsQueried.add(fallBackRange.getPartitionColumn());
           rangeParts = getPartitions(cfact.fact, fallBackRange, skipStorageCauses, missingParts);
           extraWhereClause.append(sep)
             .append(prevRange.toTimeDimWhereClause(cubeql.getAliasForTableName(cubeql.getCube()), timeDim));
@@ -433,7 +436,7 @@ class StorageTableResolver implements ContextRewriter {
         i.remove();
         continue;
       }
-      Set<String> nonExistingParts = missingParts.toSet();
+      Set<String> nonExistingParts = missingParts.toSet(partColsQueried);
       if (!nonExistingParts.isEmpty()) {
         addNonExistingParts(cfact.fact.getName(), nonExistingParts);
       }
@@ -484,11 +487,11 @@ class StorageTableResolver implements ContextRewriter {
           minimalPartsCopy.retainAll(rangeParts);
           if (!StringUtils.isEmpty(whereClauseForFallback.get(trange))) {
             rangeToWhere.put(
-                rangeWriter.getTimeRangeWhereClause(cubeql, cubeql.getAliasForTableName(cubeql.getCube().getName()),
-                    minimalPartsCopy) + " and  " + whereClauseForFallback.get(trange), table);
+              rangeWriter.getTimeRangeWhereClause(cubeql, cubeql.getAliasForTableName(cubeql.getCube().getName()),
+                minimalPartsCopy) + " and  " + whereClauseForFallback.get(trange), table);
           } else {
             rangeToWhere.put(rangeWriter.getTimeRangeWhereClause(cubeql,
-                cubeql.getAliasForTableName(cubeql.getCube().getName()), minimalPartsCopy), table);
+              cubeql.getAliasForTableName(cubeql.getCube().getName()), minimalPartsCopy), table);
           }
         }
         cfact.getRangeToStorageWhereMap().put(trange, rangeToWhere);
@@ -506,7 +509,7 @@ class StorageTableResolver implements ContextRewriter {
     HashMap<String, SkipStorageCause> skipStorageCauses,
     PartitionRangesForPartitionColumns missingPartitions) throws LensException {
     try {
-      return getPartitions(fact, range, getValidUpdatePeriods(fact), true, skipStorageCauses,
+      return getPartitions(fact, range, getValidUpdatePeriods(fact), true, failOnPartialData, skipStorageCauses,
         missingPartitions);
     } catch (Exception e) {
       throw new LensException(e);
@@ -514,22 +517,22 @@ class StorageTableResolver implements ContextRewriter {
   }
 
   private Set<FactPartition> getPartitions(CubeFactTable fact, TimeRange range, TreeSet<UpdatePeriod> updatePeriods,
-    boolean addNonExistingParts, Map<String, SkipStorageCause> skipStorageCauses,
+    boolean addNonExistingParts, boolean failOnPartialData, Map<String, SkipStorageCause> skipStorageCauses,
     PartitionRangesForPartitionColumns missingPartitions)
     throws Exception {
-    Set<FactPartition> partitions = new TreeSet<FactPartition>();
+    Set<FactPartition> partitions = new TreeSet<>();
     if (range != null && range.isCoverableBy(updatePeriods)
       && getPartitions(fact, range.getFromDate(), range.getToDate(), range.getPartitionColumn(), partitions,
-        updatePeriods, addNonExistingParts, skipStorageCauses, missingPartitions)) {
+        updatePeriods, addNonExistingParts, failOnPartialData, skipStorageCauses, missingPartitions)) {
       return partitions;
     } else {
-      return new TreeSet<FactPartition>();
+      return new TreeSet<>();
     }
   }
 
   private boolean getPartitions(CubeFactTable fact, Date fromDate, Date toDate, String partCol,
     Set<FactPartition> partitions, TreeSet<UpdatePeriod> updatePeriods,
-    boolean addNonExistingParts, Map<String, SkipStorageCause> skipStorageCauses,
+    boolean addNonExistingParts, boolean failOnPartialData, Map<String, SkipStorageCause> skipStorageCauses,
     PartitionRangesForPartitionColumns missingPartitions)
     throws Exception {
     log.info("getPartitions for {} from fromDate:{} toDate:{}", fact, fromDate, toDate);
@@ -629,21 +632,20 @@ class StorageTableResolver implements ContextRewriter {
                 log.debug("Looking for process time partitions between {} and {}", pdt, nextPdt);
                 Set<FactPartition> processTimeParts =
                   getPartitions(fact, TimeRange.getBuilder().fromDate(pdt).toDate(nextPdt).partitionColumn(
-                    processTimePartCol).build(), newset, false, skipStorageCauses, missingPartitions);
+                    processTimePartCol).build(), newset, true, false, skipStorageCauses, missingPartitions);
                 log.debug("Look ahead partitions: {}", processTimeParts);
                 TimeRange timeRange = TimeRange.getBuilder().fromDate(dt).toDate(nextDt).build();
                 for (FactPartition pPart : processTimeParts) {
                   log.debug("Looking for finer partitions in pPart: {}", pPart);
                   for (Date date : timeRange.iterable(pPart.getPeriod(), 1)) {
-                    partitions.add(new FactPartition(partCol, date, pPart.getPeriod(), pPart,
-                      partWhereClauseFormat));
+                    FactPartition innerPart = new FactPartition(partCol, date, pPart.getPeriod(), pPart,
+                      partWhereClauseFormat);
+                    updateFactPartitionStorageTablesFrom(fact, innerPart, pPart);
+                    if (innerPart.isFound()) {
+                      partitions.add(innerPart);
+                    }
                   }
                   log.debug("added all sub partitions blindly in pPart: {}", pPart);
-                  //                          if (!getPartitions(fact, dt, cal.getTime(), partCol, pPart, partitions,
-                  // newset, false,
-                  //                            skipStorageCauses, nonExistingParts)) {
-                  //                            log.info("No partitions found in look ahead range");
-                  //                          }
                 }
               }
             }
@@ -654,7 +656,7 @@ class StorageTableResolver implements ContextRewriter {
         TreeSet<UpdatePeriod> newset = new TreeSet<UpdatePeriod>();
         newset.addAll(updatePeriods);
         newset.remove(interval);
-        if (!getPartitions(fact, dt, nextDt, partCol, partitions, newset, false, skipStorageCauses,
+        if (!getPartitions(fact, dt, nextDt, partCol, partitions, newset, false, failOnPartialData, skipStorageCauses,
           missingPartitions)) {
 
           log.debug("Adding non existing partition {}", part);
@@ -676,18 +678,24 @@ class StorageTableResolver implements ContextRewriter {
       }
     }
     return getPartitions(fact, fromDate, ceilFromDate, partCol, partitions,
-      updatePeriods, addNonExistingParts, skipStorageCauses, missingPartitions)
+      updatePeriods, addNonExistingParts, failOnPartialData, skipStorageCauses, missingPartitions)
       && getPartitions(fact, floorToDate, toDate, partCol, partitions,
-        updatePeriods, addNonExistingParts, skipStorageCauses, missingPartitions);
+        updatePeriods, addNonExistingParts, failOnPartialData, skipStorageCauses, missingPartitions);
   }
 
-  private void updateFactPartitionStorageTablesFrom(CubeFactTable fact, FactPartition part,
-    Set<String> storageTableNames) throws LensException, HiveException, ParseException {
+  private void updateFactPartitionStorageTablesFrom(CubeFactTable fact,
+    FactPartition part, Set<String> storageTableNames) throws LensException, HiveException, ParseException {
     for (String storageTableName : storageTableNames) {
       if (client.factPartitionExists(fact, part, storageTableName)) {
         part.getStorageTables().add(storageTableName);
         part.setFound(true);
       }
     }
+  }
+
+  private void updateFactPartitionStorageTablesFrom(CubeFactTable fact,
+    FactPartition part, FactPartition pPart) throws LensException, HiveException, ParseException {
+    updateFactPartitionStorageTablesFrom(fact, part, pPart.getStorageTables());
+    part.setFound(part.isFound() && pPart.isFound());
   }
 }

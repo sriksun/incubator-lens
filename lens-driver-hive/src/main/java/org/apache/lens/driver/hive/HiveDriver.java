@@ -533,10 +533,8 @@ public class HiveDriver implements LensDriver {
       if (whetherCalculatePriority) {
         try {
           // Inside try since non-data fetching queries can also be executed by async method.
-          if (ctx.getDriverQueryCost(this) == null) {
-            ctx.setDriverCost(this, queryCostCalculator.calculateCost(ctx, this));
-          }
-          String priority = queryPriorityDecider.decidePriority(ctx.getDriverQueryCost(this)).toString();
+          String priority = ctx.calculateCostAndDecidePriority(this, queryCostCalculator, queryPriorityDecider)
+            .toString();
           qdconf.set("mapred.job.priority", priority);
           log.info("set priority to {}", priority);
         } catch (Exception e) {
@@ -842,7 +840,7 @@ public class HiveDriver implements LensDriver {
     log.info("Creating result set for hiveHandle:{}", op);
     try {
       if (context.isDriverPersistent()) {
-        return new HivePersistentResultSet(new Path(context.getHdfsoutPath()), op, getClient());
+        return new HivePersistentResultSet(new Path(context.getDriverResultPath()), op, getClient());
       } else if (op.hasResultSet()) {
         return new HiveInMemoryResultSet(op, getClient(), closeAfterFetch);
       } else {
@@ -874,7 +872,8 @@ public class HiveDriver implements LensDriver {
       Path resultSetPath = context.getHDFSResultDir();
       // create query
       StringBuilder builder = new StringBuilder("INSERT OVERWRITE DIRECTORY ");
-      context.setHdfsoutPath(resultSetPath.makeQualified(resultSetPath.getFileSystem(context.getConf())).toString());
+      context.setDriverResultPath(
+        resultSetPath.makeQualified(resultSetPath.getFileSystem(context.getConf())).toString());
       builder.append('"').append(resultSetPath).append("\" ");
       String outputDirFormat = qdconf.get(LensConfConstants.QUERY_OUTPUT_DIRECTORY_FORMAT);
       if (outputDirFormat != null) {

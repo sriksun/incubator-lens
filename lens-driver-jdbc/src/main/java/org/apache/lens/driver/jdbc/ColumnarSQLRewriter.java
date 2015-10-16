@@ -42,6 +42,8 @@ import org.apache.hadoop.hive.ql.parse.SemanticException;
 
 import org.antlr.runtime.CommonToken;
 
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -78,7 +80,7 @@ public class ColumnarSQLRewriter implements QueryRewriter {
   protected StringBuilder allSubQueries = new StringBuilder();
 
   /** The fact keys. */
-  Set<String> factKeys = new HashSet<String>();
+  Set<String> factKeys = new LinkedHashSet<String>();
 
   /** The rewritten query. */
   protected StringBuilder rewrittenQuery = new StringBuilder();
@@ -90,7 +92,7 @@ public class ColumnarSQLRewriter implements QueryRewriter {
   protected StringBuilder factFilterPush = new StringBuilder();
 
   /** The join list. */
-  protected ArrayList<String> joinList = new ArrayList<String>();
+  protected List<String> joinList = new ArrayList<String>();
 
   /** The join condition. */
   protected StringBuilder joinCondition = new StringBuilder();
@@ -111,19 +113,20 @@ public class ColumnarSQLRewriter implements QueryRewriter {
   private String leftFilter;
 
   /** The map agg tab alias. */
-  private final Map<String, String> mapAggTabAlias = new HashMap<String, String>();
+  private final Map<String, String> mapAggTabAlias = new LinkedHashMap<String, String>();
 
   /** The map aliases. */
-  private final Map<String, String> mapAliases = new HashMap<String, String>();
+  private final Map<String, String> mapAliases = new LinkedHashMap<String, String>();
 
   /** The table to alias map. */
-  private final Map<String, String> tableToAliasMap = new HashMap<String, String>();
+  private final Map<String, String> tableToAliasMap = new LinkedHashMap<String, String>();
 
   /** The tables to accessed column map. */
-  private final Map<String, HashSet<String>> tableToAccessedColMap = new HashMap<String, HashSet<String>>();
+  private final Map<String, LinkedHashSet<String>> tableToAccessedColMap =
+    new LinkedHashMap<String, LinkedHashSet<String>>();
 
   /** The dimension table to subquery map. */
-  private final Map<String, String> dimTableToSubqueryMap = new HashMap<String, String>();
+  private final Map<String, String> dimTableToSubqueryMap = new LinkedHashMap<String, String>();
 
   /** The where tree. */
   private String whereTree;
@@ -147,24 +150,31 @@ public class ColumnarSQLRewriter implements QueryRewriter {
   private String fromTree;
 
   /** The join ast. */
+  @Getter
   private ASTNode joinAST;
 
   /** The having ast. */
+  @Getter
   private ASTNode havingAST;
 
   /** The select ast. */
+  @Getter
   private ASTNode selectAST;
 
   /** The where ast. */
+  @Getter
   private ASTNode whereAST;
 
   /** The order by ast. */
+  @Getter
   private ASTNode orderByAST;
 
   /** The group by ast. */
+  @Getter
   private ASTNode groupByAST;
 
   /** The from ast. */
+  @Getter
   protected ASTNode fromAST;
 
   /**
@@ -379,22 +389,56 @@ public class ColumnarSQLRewriter implements QueryRewriter {
   }
 
   /**
-   * Check if expression is used in select
+   * Check if expression is answerable from fact, then push it to fact pushdown subquery
    *
    * @param node
    * @return true if expressions is used
    */
-  public boolean isExpressionsUsed(ASTNode node) {
+  public boolean isExpressionsAnswerableFromFact(ASTNode node) {
+    boolean isAnswerable = true;
     for (int i = 0; i < node.getChildCount(); i++) {
       if (node.getChild(i).getType() == HiveParser.TOK_SELEXPR) {
         int cnt = getColumnCount((ASTNode) node.getChild(i));
         if (cnt >= 2) {
-          return true;
+          if (cnt == getNumFactTableInExpressions((ASTNode) node.getChild(i), new MutableInt(0))) {
+            isAnswerable = true;
+          } else {
+            isAnswerable = false;
+          }
         }
       }
     }
-    return false;
+    return isAnswerable;
   }
+
+  /**
+   * Get number of fact columns used in the an expression
+   *
+   * @param node
+   * @param count
+   * @return Number of fact columns used in expression
+   */
+  private int getNumFactTableInExpressions(ASTNode node, MutableInt count) {
+
+    if (node == null) {
+      log.debug("ASTNode is null ");
+      return 0;
+    }
+    if (node.getToken().getType() == HiveParser.TOK_TABLE_OR_COL) {
+      String factAlias = getFactAlias();
+      String table = node.getChild(0).getText();
+      if (table.equals(factAlias)) {
+        count.add(1);
+      }
+    }
+    for (int i = 0; i < node.getChildCount(); i++) {
+      ASTNode child = (ASTNode) node.getChild(i);
+      getNumFactTableInExpressions(child, count);
+    }
+
+    return count.intValue();
+  }
+
 
   /*
    * Get filter conditions if user has specified a join condition for filter pushdown.
@@ -543,9 +587,9 @@ public class ColumnarSQLRewriter implements QueryRewriter {
         String alias = tableToAliasMap.get(tab);
 
         if ((table.equals(tab) || table.equals(alias)) && column != null) {
-          HashSet<String> cols;
+          LinkedHashSet<String> cols;
           if (!tableToAccessedColMap.containsKey(tab)) {
-            cols = new HashSet<String>();
+            cols = new LinkedHashSet<String>();
             cols.add(column);
             tableToAccessedColMap.put(tab, cols);
           } else {
@@ -571,7 +615,7 @@ public class ColumnarSQLRewriter implements QueryRewriter {
     while (iterator.hasNext()) {
       StringBuilder query = new StringBuilder();
       String tab = (String) iterator.next();
-      HashSet<String> cols = tableToAccessedColMap.get(tab);
+      LinkedHashSet<String> cols = tableToAccessedColMap.get(tab);
       query.append("(").append("select ").append(StringUtils.join(cols, ","))
           .append(" from ").append(tab).append(")");
       dimTableToSubqueryMap.put(tab, query.toString());
@@ -629,7 +673,7 @@ public class ColumnarSQLRewriter implements QueryRewriter {
         getAllFilters(whereAST);
         rightFilter.add(leftFilter);
 
-        Set<String> setAllFilters = new HashSet<String>(rightFilter);
+        Set<String> setAllFilters = new LinkedHashSet<String>(rightFilter);
 
         // Check the occurrence of dimension table in the filter list and
         // combine all filters of same dimension table with and .
@@ -682,7 +726,7 @@ public class ColumnarSQLRewriter implements QueryRewriter {
       ref = keyString.substring(0, keyString.indexOf("__")).replaceAll("[(,)]", "");
     }
     if (type.equals("alias")) {
-      ref = keyString.substring(0, keyString.lastIndexOf(".")).replaceAll("[(,)]", "");
+      ref = keyString.substring(0, keyString.indexOf(".")).replaceAll("[(,)]", "");
     }
     return ref;
   }
@@ -818,7 +862,7 @@ public class ColumnarSQLRewriter implements QueryRewriter {
   public String getFactNameAlias(ASTNode fromAST) {
     String factTable;
     String factAlias;
-    ArrayList<String> allTables = new ArrayList<String>();
+    ArrayList<String> allTables = new ArrayList<>();
     getAllTablesfromFromAST(fromAST, allTables);
 
     String[] keys = allTables.get(0).trim().split(" +");
@@ -888,7 +932,7 @@ public class ColumnarSQLRewriter implements QueryRewriter {
    * @return the string
    */
   public String replaceUDFForDB(String query) {
-    Map<String, String> imputnmatch = new HashMap<String, String>();
+    Map<String, String> imputnmatch = new LinkedHashMap<String, String>();
     imputnmatch.put("to_date", "date");
     imputnmatch.put("format_number", "format");
     imputnmatch.put("date_sub\\((.*?),\\s*([0-9]+\\s*)\\)", "date_sub($1, interval $2 day)");
@@ -944,7 +988,7 @@ public class ColumnarSQLRewriter implements QueryRewriter {
    */
   public void buildQuery(Configuration conf, HiveConf hconf) throws SemanticException {
     analyzeInternal(conf, hconf);
-    replaceWithUnderlyingStorage(hconf, fromAST);
+    replaceWithUnderlyingStorage(hconf);
     replaceAliasInAST();
     getFilterInJoinCond(fromAST);
     getAggregateColumns(selectAST, new MutableInt(0));
@@ -961,10 +1005,8 @@ public class ColumnarSQLRewriter implements QueryRewriter {
 
     // Construct the final fact in-line query with keys,
     // measures and individual sub queries built.
-
-
     if (whereTree == null || joinTree == null || allSubQueries.length() == 0
-        || aggColumn.isEmpty() || isExpressionsUsed(selectAST)) {
+        || aggColumn.isEmpty() || !isExpressionsAnswerableFromFact(selectAST)) {
       log.info("@@@Query not eligible for inner subquery rewrite");
       // construct query without fact sub query
       constructQuery(selectTree, whereTree, groupByTree, havingTree, orderByTree, limit);
@@ -1187,67 +1229,143 @@ public class ColumnarSQLRewriter implements QueryRewriter {
     return queryReplacedUdf;
   }
 
-  // Replace Lens database names with storage's proper DB and table name based
-  // on table properties.
+
+  @NoArgsConstructor
+  private static class NativeTableInfo {
+    private Map<String, String> columnMapping = new LinkedHashMap<>();
+    NativeTableInfo(Table tbl) {
+      String columnMappingProp = tbl.getProperty(LensConfConstants.NATIVE_TABLE_COLUMN_MAPPING);
+      if (StringUtils.isNotBlank(columnMappingProp)) {
+        String[] columnMapArray = StringUtils.split(columnMappingProp, ",");
+        for (String columnMapEntry : columnMapArray) {
+          String[] mapEntry = StringUtils.split(columnMapEntry, "=");
+          columnMapping.put(mapEntry[0].trim(), mapEntry[1].trim());
+        }
+      }
+    }
+    String getNativeColumn(String col) {
+      String retCol = columnMapping.get(col);
+      return retCol != null ? retCol : col;
+    }
+  }
+
+  private Map<String, NativeTableInfo> aliasToNativeTableInfo = new LinkedHashMap<>();
 
   /**
    * Replace with underlying storage.
    *
-   * @param tree the AST tree
+   * @param metastoreConf the metastore configuration
    */
-  protected void replaceWithUnderlyingStorage(HiveConf metastoreConf, ASTNode tree) {
+  protected void replaceWithUnderlyingStorage(HiveConf metastoreConf) {
+    replaceDBAndTableNames(metastoreConf, fromAST);
+    if (aliasToNativeTableInfo.isEmpty()) {
+      return;
+    }
+    replaceColumnNames(selectAST);
+    replaceColumnNames(fromAST);
+    replaceColumnNames(whereAST);
+    replaceColumnNames(groupByAST);
+    replaceColumnNames(orderByAST);
+    replaceColumnNames(havingAST);
+  }
+  // Replace Lens database names with storage's proper DB and table name based
+  // on table properties.
+  protected void replaceDBAndTableNames(HiveConf metastoreConf, ASTNode tree) {
     if (tree == null) {
       return;
     }
 
-    if (TOK_TABNAME == tree.getToken().getType()) {
-      // If it has two children, the first one is the DB name and second one is
-      // table identifier
-      // Else, we have to add the DB name as the first child
-      try {
-        if (tree.getChildCount() == 2) {
-          ASTNode dbIdentifier = (ASTNode) tree.getChild(0);
-          ASTNode tableIdentifier = (ASTNode) tree.getChild(1);
-          String lensTable = dbIdentifier.getText() + "." + tableIdentifier.getText();
-          Table tbl = CubeMetastoreClient.getInstance(metastoreConf).getHiveTable(lensTable);
-          String table = getUnderlyingTableName(tbl);
-          String db = getUnderlyingDBName(tbl);
+    if (TOK_TABREF == tree.getToken().getType()) {
+      // TOK_TABREF will have TOK_TABNAME as first child and alias as second child.
+      String alias;
+      String tblName = null;
+      Table tbl = null;
+      ASTNode tabNameChild = (ASTNode) tree.getChild(0);
+      if (TOK_TABNAME == tabNameChild.getToken().getType()) {
+        // If it has two children, the first one is the DB name and second one is
+        // table identifier
+        // Else, we have to add the DB name as the first child
+        try {
+          if (tabNameChild.getChildCount() == 2) {
+            ASTNode dbIdentifier = (ASTNode) tabNameChild.getChild(0);
+            ASTNode tableIdentifier = (ASTNode) tabNameChild.getChild(1);
+            tblName = tableIdentifier.getText();
+            String lensTable = dbIdentifier.getText() + "." + tblName;
+            tbl = CubeMetastoreClient.getInstance(metastoreConf).getHiveTable(lensTable);
+            String table = getUnderlyingTableName(tbl);
+            String db = getUnderlyingDBName(tbl);
 
-          // Replace both table and db names
-          if ("default".equalsIgnoreCase(db)) {
-            // Remove the db name for this case
-            tree.deleteChild(0);
-          } else if (StringUtils.isNotBlank(db)) {
-            dbIdentifier.getToken().setText(db);
-          } // If db is empty, then leave the tree untouched
+            // Replace both table and db names
+            if ("default".equalsIgnoreCase(db)) {
+              // Remove the db name for this case
+              tabNameChild.deleteChild(0);
+            } else if (StringUtils.isNotBlank(db)) {
+              dbIdentifier.getToken().setText(db);
+            } // If db is empty, then leave the tree untouched
 
-          if (StringUtils.isNotBlank(table)) {
-            tableIdentifier.getToken().setText(table);
+            if (StringUtils.isNotBlank(table)) {
+              tableIdentifier.getToken().setText(table);
+            }
+          } else {
+            ASTNode tableIdentifier = (ASTNode) tabNameChild.getChild(0);
+            tblName = tableIdentifier.getText();
+            tbl = CubeMetastoreClient.getInstance(metastoreConf).getHiveTable(tblName);
+            String table = getUnderlyingTableName(tbl);
+            // Replace table name
+            if (StringUtils.isNotBlank(table)) {
+              tableIdentifier.getToken().setText(table);
+            }
+
+            // Add db name as a new child
+            String dbName = getUnderlyingDBName(tbl);
+            if (StringUtils.isNotBlank(dbName) && !"default".equalsIgnoreCase(dbName)) {
+              ASTNode dbIdentifier = new ASTNode(new CommonToken(HiveParser.Identifier, dbName));
+              dbIdentifier.setParent(tabNameChild);
+              tabNameChild.insertChild(0, dbIdentifier);
+            }
           }
-        } else {
-          ASTNode tableIdentifier = (ASTNode) tree.getChild(0);
-          String lensTable = tableIdentifier.getText();
-          Table tbl = CubeMetastoreClient.getInstance(metastoreConf).getHiveTable(lensTable);
-          String table = getUnderlyingTableName(tbl);
-          // Replace table name
-          if (StringUtils.isNotBlank(table)) {
-            tableIdentifier.getToken().setText(table);
-          }
-
-          // Add db name as a new child
-          String dbName = getUnderlyingDBName(tbl);
-          if (StringUtils.isNotBlank(dbName) && !"default".equalsIgnoreCase(dbName)) {
-            ASTNode dbIdentifier = new ASTNode(new CommonToken(HiveParser.Identifier, dbName));
-            dbIdentifier.setParent(tree);
-            tree.insertChild(0, dbIdentifier);
+        } catch (HiveException e) {
+          log.warn("No corresponding table in metastore:", e);
+        }
+      }
+      if (tree.getChildCount() == 2) {
+        alias = tree.getChild(1).getText();
+      } else {
+        alias = tblName;
+      }
+      if (StringUtils.isNotBlank(alias)) {
+        alias = alias.toLowerCase();
+        if (!aliasToNativeTableInfo.containsKey(alias)) {
+          if (tbl != null) {
+            aliasToNativeTableInfo.put(alias, new NativeTableInfo(tbl));
           }
         }
-      } catch (HiveException e) {
-        log.warn("No corresponding table in metastore:", e);
       }
     } else {
       for (int i = 0; i < tree.getChildCount(); i++) {
-        replaceWithUnderlyingStorage(metastoreConf, (ASTNode) tree.getChild(i));
+        replaceDBAndTableNames(metastoreConf, (ASTNode) tree.getChild(i));
+      }
+    }
+  }
+
+  void replaceColumnNames(ASTNode node) {
+    if (node == null) {
+      return;
+    }
+    int nodeType = node.getToken().getType();
+    if (nodeType == HiveParser.DOT) {
+      ASTNode tabident = HQLParser.findNodeByPath(node, TOK_TABLE_OR_COL, Identifier);
+      ASTNode colIdent = (ASTNode) node.getChild(1);
+      String column = colIdent.getText().toLowerCase();
+      String alias = tabident.getText().toLowerCase();
+      if (aliasToNativeTableInfo.get(alias) != null) {
+        colIdent.getToken().setText(aliasToNativeTableInfo.get(alias).getNativeColumn(column));
+      }
+    } else {
+      // recurse down
+      for (int i = 0; i < node.getChildCount(); i++) {
+        ASTNode child = (ASTNode) node.getChild(i);
+        replaceColumnNames(child);
       }
     }
   }

@@ -41,7 +41,7 @@ public class TestExpressionResolver extends TestQueryRewrite {
   @BeforeTest
   public void setupDriver() throws Exception {
     conf = new Configuration();
-    conf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C1,C2");
+    conf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C1");
     conf.setBoolean(CubeQueryConfUtil.DISABLE_AUTO_JOINS, false);
     conf.setBoolean(CubeQueryConfUtil.ENABLE_SELECT_TO_GROUPBY, true);
     conf.setBoolean(CubeQueryConfUtil.ENABLE_GROUP_BY_TO_SELECT, true);
@@ -52,7 +52,7 @@ public class TestExpressionResolver extends TestQueryRewrite {
   public void testColumnErrors() throws Exception {
     LensException th;
     th = getLensExceptionInRewrite("select nocolexpr, SUM(msr2) from testCube" + " where " + TWO_DAYS_RANGE, conf);
-    Assert.assertEquals(th.getErrorCode(), LensCubeErrorCode.COLUMN_NOT_FOUND.getValue());
+    Assert.assertEquals(th.getErrorCode(), LensCubeErrorCode.COLUMN_NOT_FOUND.getLensErrorInfo().getErrorCode());
 
     Assert.assertTrue(getLensExceptionErrorMessageInRewrite(
         "select nocolexpr, SUM(msr2) from testCube" + " where " + TWO_DAYS_RANGE, conf).contains("nonexist"));
@@ -62,7 +62,7 @@ public class TestExpressionResolver extends TestQueryRewrite {
 
     th = getLensExceptionInRewrite("select invalidexpr, " + "SUM(msr2) from testCube" + " where " + TWO_DAYS_RANGE,
         conf);
-    Assert.assertEquals(th.getErrorCode(), LensCubeErrorCode.COLUMN_NOT_FOUND.getValue());
+    Assert.assertEquals(th.getErrorCode(), LensCubeErrorCode.COLUMN_NOT_FOUND.getLensErrorInfo().getErrorCode());
   }
 
   @Test
@@ -289,6 +289,7 @@ public class TestExpressionResolver extends TestQueryRewrite {
   @Test
   public void testMultipleExpressionsPickingFirstExpression() throws Exception {
     Configuration newConf = new Configuration(conf);
+    newConf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C2");
     newConf.set(CubeQueryConfUtil.getValidFactTablesKey(cubeName), "testFact");
     String hqlQuery = rewrite("select equalsums from testCube where " + TWO_DAYS_RANGE, newConf);
     String expected =
@@ -317,6 +318,7 @@ public class TestExpressionResolver extends TestQueryRewrite {
   @Test
   public void testMaterializedExpressionPickingMaterializedValue() throws Exception {
     Configuration newConf = new Configuration(conf);
+    newConf.set(CubeQueryConfUtil.DRIVER_SUPPORTED_STORAGES, "C2");
     newConf.set(CubeQueryConfUtil.getValidFactTablesKey(cubeName), "testFact");
     String hqlQuery = rewrite("select msr5 from testCube where " + TWO_DAYS_RANGE, newConf);
     String expected = getExpectedQuery(cubeName, "select testcube.msr5 FROM ", null, null,
@@ -337,7 +339,7 @@ public class TestExpressionResolver extends TestQueryRewrite {
   public void testDerivedCube() throws ParseException, LensException, HiveException {
     LensException th =
       getLensExceptionInRewrite("select avgmsr from derivedCube" + " where " + TWO_DAYS_RANGE, conf);
-    Assert.assertEquals(th.getErrorCode(), LensCubeErrorCode.COLUMN_NOT_FOUND.getValue());
+    Assert.assertEquals(th.getErrorCode(), LensCubeErrorCode.COLUMN_NOT_FOUND.getLensErrorInfo().getErrorCode());
   }
 
   @Test

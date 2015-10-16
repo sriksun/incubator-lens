@@ -72,6 +72,12 @@
   </property>
 
   <property>
+    <name>lens.server.savedquery.service.impl</name>
+    <value>org.apache.lens.server.query.save.SavedQueryServiceImpl</value>
+    <description>Implementation class for saved query service</description>
+  </property>
+
+  <property>
     <name>lens.server.quota.service.impl</name>
     <value>org.apache.lens.server.quota.QuotaServiceImpl</value>
     <description>Implementation class for quota service</description>
@@ -273,9 +279,9 @@
 
   <!-- Finished Query Purging Configurations -->
   <property>
-    <name>lens.server.max.finished.queries</name>
-    <value>100</value>
-    <description>Maximum number of finished queries which lens server will keep in memory before purging.</description>
+    <name>lens.server.querypurger.sleep.interval</name>
+    <value>10000</value>
+    <description>The interval(milliseconds) with which purger to run periodically. Default 10 sec. </description>
   </property>
   <property>
     <name>lens.server.domain</name>
@@ -368,6 +374,12 @@
     <name>lens.server.session.ws.resource.impl</name>
     <value>org.apache.lens.server.session.SessionResource</value>
     <description>Implementation class for Session Resource</description>
+  </property>
+
+  <property>
+    <name>lens.server.savedquery.ws.resource.impl</name>
+    <value>org.apache.lens.server.query.save.SavedQueryResource</value>
+    <description>Implementation class for Saved query Resource</description>
   </property>
 
   <property>
@@ -751,6 +763,23 @@
     <description>Factories used to instantiate waiting queries selection policies. Every factory should
       be an implementation of org.apache.lens.server.api.common.ConfigBasedObjectCreationFactory and create an
       implementation of org.apache.lens.server.api.query.collect.WaitingQueriesSelectionPolicy.</description>
+  </property>
+
+  <property>
+    <name>lens.server.savedquery.jdbc.dialectclass</name>
+    <value>org.apache.lens.server.query.save.SavedQueryDao$HSQLDialect</value>
+    <description>Dialect of the target DB, Default is HSQL. Override with the target DB used.</description>
+  </property>
+
+  <property>
+    <name>lens.server.savedquery.list.default.offset</name>
+    <value>0</value>
+    <description>Key denoting the default start value of saved query list api.</description>
+  </property>
+  <property>
+    <name>lens.server.savedquery.list.default.count</name>
+    <value>20</value>
+    <description>Key denoting the default fetch value of saved query list api.</description>
   </property>
 
 </configuration>

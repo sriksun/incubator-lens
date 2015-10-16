@@ -49,7 +49,7 @@ import com.google.common.base.Joiner;
  * SUSPEND CHECKSTYLE CHECK InnerAssignmentCheck
  */
 @Component
-@UserDocumentation(title = "Query Management",
+@UserDocumentation(title = "Commands for Query Management",
   description = "This section provides commands for query life cycle - "
     + "submit, check status,\n"
     + "  fetch results, kill or list all the queries. Also provides commands for\n"
@@ -120,14 +120,7 @@ public class LensQueryCommands extends BaseLensCommand {
       QueryResult r = rs.getResultSet().getResult();
       if (r instanceof InMemoryQueryResult) {
         InMemoryQueryResult temp = (InMemoryQueryResult) r;
-        for (ResultRow row : temp.getRows()) {
-          for (Object col : row.getValues()) {
-            b.append(col).append("\t");
-          }
-          numRows++;
-          b.append("\n");
-        }
-        b.append(numRows + " rows ");
+        b.append(temp.toPrettyString());
       } else {
         PersistentQueryResult temp = (PersistentQueryResult) r;
         b.append("Results of query stored at : ").append(temp.getPersistedURI()).append("  ");
@@ -156,26 +149,10 @@ public class LensQueryCommands extends BaseLensCommand {
   public String getStatus(
     @CliOption(key = {"", "query_handle"}, mandatory = true, help = "<query_handle>") String qh) {
     QueryStatus status = getClient().getQueryStatus(new QueryHandle(UUID.fromString(qh)));
-    StringBuilder sb = new StringBuilder();
     if (status == null) {
       return "Unable to find status for " + qh;
     }
-    sb.append("Status : ").append(status.getStatus()).append("\n");
-    if (status.getStatusMessage() != null) {
-      sb.append("Message : ").append(status.getStatusMessage()).append("\n");
-    }
-    if (status.getProgress() != 0) {
-      sb.append("Progress : ").append(status.getProgress()).append("\n");
-      if (status.getProgressMessage() != null) {
-        sb.append("Progress Message : ").append(status.getProgressMessage()).append("\n");
-      }
-    }
-
-    if (status.getErrorMessage() != null) {
-      sb.append("Error : ").append(status.getErrorMessage()).append("\n");
-    }
-
-    return sb.toString();
+    return status.toString();
   }
 
   /**
@@ -206,26 +183,34 @@ public class LensQueryCommands extends BaseLensCommand {
    * @param sql      the sql
    * @param location the location
    * @return the string
+   * @throws LensAPIException
    * @throws UnsupportedEncodingException the unsupported encoding exception
    */
-  @CliCommand(value = "query explain",
-    help = "Explain execution plan of query <query-string>. Can optionally save the plan"
-      + " to a file by providing <save_location>")
-  public String explainQuery(@CliOption(key = {"", "query"}, mandatory = true, help = "<query-string>") String sql,
-    @CliOption(key = {"save_location"}, mandatory = false, help = "<save_location>") final File path)
-    throws IOException {
-    QueryPlan plan = getClient().getQueryPlan(sql);
-    if (plan.isError()) {
-      return "Explain FAILED:" + plan.getErrorMsg();
-    }
-    if (path != null && StringUtils.isNotBlank(path.getPath())) {
-      String validPath = getValidPath(path, false, false);
-      try (OutputStreamWriter osw = new OutputStreamWriter(new FileOutputStream(validPath), Charset.defaultCharset())) {
-        osw.write(plan.getPlanString());
+  @CliCommand(value = "query explain", help = "Explain execution plan of query <query-string>. "
+      + "Can optionally save the plan to a file by providing <save_location>")
+  public String explainQuery(@CliOption(key = { "", "query" }, mandatory = true, help = "<query-string>") String sql,
+      @CliOption(key = { "save_location" }, mandatory = false, help = "<save_location>") final File path)
+    throws IOException, LensAPIException {
+    PrettyPrintable cliOutput;
+
+    try {
+      QueryPlan plan = getClient().getQueryPlan(sql).getData();
+      if (path != null && StringUtils.isNotBlank(path.getPath())) {
+        String validPath = getValidPath(path, false, false);
+        try (OutputStreamWriter osw = new OutputStreamWriter(new FileOutputStream(validPath),
+            Charset.defaultCharset())) {
+          osw.write(plan.getPlanString());
+        }
+        return "Saved to " + validPath;
       }
-      return "Saved to " + validPath;
+      return plan.getPlanString();
+    } catch (final LensAPIException e) {
+      BriefError briefError = new BriefError(e.getLensAPIErrorCode(), e.getLensAPIErrorMessage());
+      cliOutput = new IdBriefErrorTemplate(IdBriefErrorTemplateKey.REQUEST_ID, e.getLensAPIRequestId(), briefError);
+    } catch (final LensBriefErrorException e) {
+      cliOutput = e.getIdBriefErrorTemplate();
     }
-    return plan.getPlanString();
+    return cliOutput.toPrettyString();
   }
 
   /**
@@ -446,36 +431,47 @@ public class LensQueryCommands extends BaseLensCommand {
    * @param queryName the query name
    * @return the string
    * @throws UnsupportedEncodingException the unsupported encoding exception
+   * @throws LensAPIException
    */
   @CliCommand(value = "prepQuery prepare",
     help = "Prepapre query <query-string> and return prepare handle. Can optionaly provide <query-name>")
   public String prepare(@CliOption(key = {"", "query"}, mandatory = true, help = "<query-string>") String sql,
     @CliOption(key = {"name"}, mandatory = false, help = "<query-name>") String queryName)
-    throws UnsupportedEncodingException {
-    return getClient().prepare(sql, queryName).toString();
+    throws UnsupportedEncodingException, LensAPIException {
+    return getClient().prepare(sql, queryName).getData().toString();
   }
 
   /**
    * Explain and prepare.
    *
-   * @param sql       the sql
-   * @param queryName the query name
+   * @param sql
+   *          the sql
+   * @param queryName
+   *          the query name
    * @return the string
-   * @throws UnsupportedEncodingException the unsupported encoding exception
+   * @throws UnsupportedEncodingException
+   *           the unsupported encoding exception
+   * @throws LensAPIException
    */
-  @CliCommand(value = "prepQuery explain",
-    help = "Explain and prepare query <query-string>. Can optionally provide <query-name>")
+  @CliCommand(value = "prepQuery explain", help = "Explain and prepare query <query-string>. "
+      + "Can optionally provide <query-name>")
   public String explainAndPrepare(
-    @CliOption(key = {"", "query"}, mandatory = true, help = "<query-string>") String sql,
-    @CliOption(key = {"name"}, mandatory = false, help = "<query-name>") String queryName)
-    throws UnsupportedEncodingException {
 
-    QueryPlan plan = getClient().explainAndPrepare(sql, queryName);
-    if (plan.isError()) {
-      return "Explain FAILED:" + plan.getErrorMsg();
+  @CliOption(key = { "", "query" }, mandatory = true, help = "<query-string>") String sql,
+      @CliOption(key = { "name" }, mandatory = false, help = "<query-name>") String queryName)
+    throws UnsupportedEncodingException, LensAPIException {
+    PrettyPrintable cliOutput;
+    try {
+      QueryPlan plan = getClient().explainAndPrepare(sql, queryName).getData();
+      StringBuilder planStr = new StringBuilder(plan.getPlanString());
+      planStr.append("\n").append("Prepare handle:").append(plan.getPrepareHandle());
+      return planStr.toString();
+    } catch (final LensAPIException e) {
+      BriefError briefError = new BriefError(e.getLensAPIErrorCode(), e.getLensAPIErrorMessage());
+      cliOutput = new IdBriefErrorTemplate(IdBriefErrorTemplateKey.REQUEST_ID, e.getLensAPIRequestId(), briefError);
+    } catch (final LensBriefErrorException e) {
+      cliOutput = e.getIdBriefErrorTemplate();
     }
-    StringBuilder planStr = new StringBuilder(plan.getPlanString());
-    planStr.append("\n").append("Prepare handle:").append(plan.getPrepareHandle());
-    return planStr.toString();
+    return cliOutput.toPrettyString();
   }
 }
