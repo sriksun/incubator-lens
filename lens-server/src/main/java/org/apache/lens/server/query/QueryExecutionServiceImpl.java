@@ -2562,12 +2562,13 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
   /*
    * (non-Javadoc)
    *
-   * @see org.apache.lens.server.api.query.QueryExecutionService#getAllQueryDetails(org.apache.lens.api.LensSessionHandle,
-   * java.lang.String, java.lang.String, java.lang.String, java.lang.String, long, long)
+   * @see org.apache.lens.server.api.query.QueryExecutionService#getAllQueryDetails(
+   * org.apache.lens.api.LensSessionHandle, java.lang.String, java.lang.String,
+   * java.lang.String, java.lang.String, long, long)
    */
   @Override
-  public List<LensQuery> getAllQueryDetails(LensSessionHandle sessionHandle, String states, String userName, String driver,
-    String queryName, String fromDate, String toDate) throws LensException {
+  public List<LensQuery> getAllQueryDetails(LensSessionHandle sessionHandle, String states, String userName,
+    String driver, String queryName, String fromDate, String toDate) throws LensException {
     long fromTime = -1;
     long toTime = Long.MAX_VALUE;
     Date now = new Date();
@@ -2590,7 +2591,9 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       List<LensQuery> result = new ArrayList<>();
       for (QueryHandle handle : inMemoryHandles) {
         QueryContext ctx = allQueries.get(handle);
-        if (ctx == null) continue;
+        if (ctx == null) {
+          continue;
+        }
         result.add(ctx.toLensQuery());
       }
 
@@ -2742,8 +2745,8 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
         statuses = Sets.newHashSet(Status.values());
       }
     } catch (IllegalArgumentException e) {
-      throw new BadRequestException("Bad state argument passed, possible values are " +
-        Arrays.toString(Status.values()), e);
+      throw new BadRequestException("Bad state argument passed, possible values are "
+        + Arrays.toString(Status.values()), e);
     }
     return statuses;
   }
