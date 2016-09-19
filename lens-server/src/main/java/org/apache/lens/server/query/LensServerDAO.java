@@ -27,6 +27,7 @@ import java.util.List;
 import javax.sql.DataSource;
 
 import org.apache.lens.api.query.QueryHandle;
+import org.apache.lens.api.query.QueryStatus;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.query.FinishedLensQuery;
 import org.apache.lens.server.util.UtilityMethods;
@@ -82,11 +83,11 @@ public class LensServerDAO {
    */
   public void createFinishedQueriesTable() throws Exception {
     String sql = "CREATE TABLE if not exists finished_queries (handle varchar(255) not null unique,"
-      + "userquery varchar(10000) not null," + "submitter varchar(255) not null," + "starttime bigint, "
-      + "endtime bigint," + "result varchar(255)," + "status varchar(255), " + "metadata varchar(100000), "
-      + "rows int, " + "filesize bigint, " + "errormessage varchar(10000), " + "driverstarttime bigint, "
-      + "driverendtime bigint, " + "driverclass varchar(10000), "
-      + "queryname varchar(255), " + "submissiontime bigint" + ")";
+      + "userquery varchar(20000) not null," + "submitter varchar(255) not null," + "priority varchar(255), "
+      + "starttime bigint, " + "endtime bigint," + "result varchar(255)," + "status varchar(255), "
+      + "metadata varchar(100000), " + "rows int, " + "filesize bigint, " + "errormessage varchar(10000), "
+      + "driverstarttime bigint, " + "driverendtime bigint, " + "drivername varchar(10000), "
+      + "queryname varchar(255), " + "submissiontime bigint, " + "driverquery varchar(1000000)" + ")";
     try {
       QueryRunner runner = new QueryRunner(ds);
       runner.update(sql);
@@ -107,17 +108,18 @@ public class LensServerDAO {
     if (alreadyExisting == null) {
       // The expected case
       Connection conn = null;
-      String sql = "insert into finished_queries (handle, userquery,submitter,"
+      String sql = "insert into finished_queries (handle, userquery, submitter, priority, "
         + "starttime,endtime,result,status,metadata,rows,filesize,"
-        + "errormessage,driverstarttime,driverendtime, driverclass, queryname, submissiontime)"
-        + " values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        + "errormessage,driverstarttime,driverendtime, drivername, queryname, submissiontime, driverquery)"
+        + " values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
       try {
         conn = getConnection();
         QueryRunner runner = new QueryRunner();
-        runner.update(conn, sql, query.getHandle(), query.getUserQuery(), query.getSubmitter(), query.getStartTime(),
-          query.getEndTime(), query.getResult(), query.getStatus(), query.getMetadata(), query.getRows(),
-          query.getFileSize(), query.getErrorMessage(), query.getDriverStartTime(), query.getDriverEndTime(),
-          query.getDriverClass(), query.getQueryName(), query.getSubmissionTime());
+        runner.update(conn, sql, query.getHandle(), query.getUserQuery(), query.getSubmitter(), query.getPriority(),
+            query.getStartTime(), query.getEndTime(), query.getResult(), query.getStatus(), query.getMetadata(),
+            query.getRows(), query.getFileSize(), query.getErrorMessage(), query.getDriverStartTime(),
+            query.getDriverEndTime(), query.getDriverName(), query.getQueryName(), query.getSubmissionTime(),
+            query.getDriverQuery());
         conn.commit();
       } finally {
         DbUtils.closeQuietly(conn);
@@ -156,51 +158,53 @@ public class LensServerDAO {
   /**
    * Find finished queries.
    *
-   * @param state     the state
+   * @param states     the state
    * @param user      the user
-   * @param driverName the driverClass
+   * @param driverName the driver's fully qualified Name
    * @param queryName the query name
    * @param fromDate  the from date
    * @param toDate    the to date
    * @return the list
    * @throws LensException the lens exception
    */
-  public List<QueryHandle> findFinishedQueries(String state, String user, String driverName, String queryName,
-    long fromDate, long toDate) throws LensException {
-    boolean addFilter = StringUtils.isNotBlank(state) || StringUtils.isNotBlank(user)
-      || StringUtils.isNotBlank(queryName);
+  public List<QueryHandle> findFinishedQueries(List<QueryStatus.Status> states, String user, String driverName,
+    String queryName, long fromDate, long toDate) throws LensException {
     StringBuilder builder = new StringBuilder("SELECT handle FROM finished_queries");
     List<Object> params = null;
-    if (addFilter) {
-      builder.append(" WHERE ");
-      List<String> filters = new ArrayList<String>(3);
-      params = new ArrayList<Object>(3);
+    builder.append(" WHERE ");
+    List<String> filters = new ArrayList<String>(3);
+    params = new ArrayList<Object>(3);
 
-      if (StringUtils.isNotBlank(state)) {
-        filters.add("status=?");
-        params.add(state);
+    if (states != null && !states.isEmpty()) {
+      StringBuilder statusFilterBuilder = new StringBuilder("status in (");
+      String sep = "";
+      for(QueryStatus.Status status: states) {
+        statusFilterBuilder.append(sep).append("?");
+        sep = ", ";
+        params.add(status.toString());
       }
-
-      if (StringUtils.isNotBlank(user)) {
-        filters.add("submitter=?");
-        params.add(user);
-      }
-
-      if (StringUtils.isNotBlank(queryName)) {
-        filters.add("queryname like ?");
-        params.add("%" + queryName + "%");
-      }
-
-      if (StringUtils.isNotBlank(driverName)) {
-        filters.add("lower(driverclass)=?");
-        params.add(driverName.toLowerCase());
-      }
-
-      filters.add("submissiontime BETWEEN ? AND ?");
-      params.add(fromDate);
-      params.add(toDate);
-      builder.append(StringUtils.join(filters, " AND "));
+      filters.add(statusFilterBuilder.append(")").toString());
     }
+
+    if (StringUtils.isNotBlank(user)) {
+      filters.add("submitter=?");
+      params.add(user);
+    }
+
+    if (StringUtils.isNotBlank(queryName)) {
+      filters.add("queryname like ?");
+      params.add("%" + queryName + "%");
+    }
+
+    if (StringUtils.isNotBlank(driverName)) {
+      filters.add("lower(drivername)=?");
+      params.add(driverName.toLowerCase());
+    }
+
+    filters.add("submissiontime BETWEEN ? AND ?");
+    params.add(fromDate);
+    params.add(toDate);
+    builder.append(StringUtils.join(filters, " AND "));
 
     ResultSetHandler<List<QueryHandle>> resultSetHandler = new ResultSetHandler<List<QueryHandle>>() {
       @Override
@@ -221,11 +225,7 @@ public class LensServerDAO {
     QueryRunner runner = new QueryRunner(ds);
     String query = builder.toString();
     try {
-      if (addFilter) {
-        return runner.query(query, resultSetHandler, params.toArray());
-      } else {
-        return runner.query(query, resultSetHandler);
-      }
+      return runner.query(query, resultSetHandler, params.toArray());
     } catch (SQLException e) {
       throw new LensException(e);
     }

@@ -19,22 +19,28 @@
 
 package org.apache.lens.cube.parse;
 
+import static org.apache.lens.cube.metadata.DateFactory.*;
 import static org.apache.lens.cube.parse.CandidateTablePruneCause.CandidateTablePruneCode.COLUMN_NOT_FOUND;
 import static org.apache.lens.cube.parse.CandidateTablePruneCause.CandidateTablePruneCode.FACT_NOT_AVAILABLE_IN_RANGE;
-import static org.apache.lens.cube.parse.CubeTestSetup.*;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 
+import java.util.Calendar;
+import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.lens.cube.error.NoCandidateFactAvailableException;
+import org.apache.lens.cube.metadata.TimeRange;
+import org.apache.lens.server.api.LensConfConstants;
 import org.apache.lens.server.api.error.LensException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.parse.ParseException;
 
+import org.joda.time.DateTime;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
 
@@ -64,9 +70,10 @@ public class TestTimeRangeResolver extends TestQueryRewrite {
   @Test
   public void testFactValidity() throws ParseException, LensException, HiveException, ClassNotFoundException {
     LensException e =
-      getLensExceptionInRewrite("cube select msr2 from " + cubeName + " where " + LAST_YEAR_RANGE,
+      getLensExceptionInRewrite("select msr2 from " + cubeName + " where " + LAST_YEAR_RANGE,
         getConf());
-    PruneCauses.BriefAndDetailedError causes = extractPruneCause(e);
+    NoCandidateFactAvailableException ne = (NoCandidateFactAvailableException) e;
+    PruneCauses.BriefAndDetailedError causes = ne.getJsonMessage();
     assertTrue(causes.getBrief().contains("Columns [msr2] are not present in any table"));
     assertEquals(causes.getDetails().size(), 2);
 
@@ -84,7 +91,7 @@ public class TestTimeRangeResolver extends TestQueryRewrite {
   @Test
   public void testAbsoluteValidity() throws ParseException, HiveException, LensException {
     CubeQueryContext ctx =
-      rewriteCtx("cube select msr12 from basecube where " + TWO_DAYS_RANGE + " or " + TWO_DAYS_RANGE_BEFORE_4_DAYS,
+      rewriteCtx("select msr12 from basecube where " + TWO_DAYS_RANGE + " or " + TWO_DAYS_RANGE_BEFORE_4_DAYS,
         getConf());
     assertEquals(ctx.getFactPruningMsgs().get(ctx.getMetastoreClient().getCubeFact("testfact_deprecated")).size(), 1);
     CandidateTablePruneCause pruningMsg =
@@ -93,5 +100,19 @@ public class TestTimeRangeResolver extends TestQueryRewrite {
     // That would prove that parsing of properties has gone through successfully
     assertEquals(pruningMsg.getCause(), FACT_NOT_AVAILABLE_IN_RANGE);
     assertTrue(pruningMsg.getInvalidRanges().containsAll(ctx.getTimeRanges()));
+  }
+
+  @Test
+  public void testCustomNow() throws Exception {
+    Configuration conf = getConf();
+    DateTime dt = new DateTime(1990, 3, 23, 12, 0, 0, 0);
+    conf.setLong(LensConfConstants.QUERY_CURRENT_TIME_IN_MILLIS, dt.getMillis());
+    CubeQueryContext ctx = rewriteCtx("select msr12 from basecube where time_range_in(d_time, 'now.day-275days','now')",
+        conf);
+    TimeRange timeRange = ctx.getTimeRanges().get(0);
+    // Month starts from zero.
+    Calendar from = new GregorianCalendar(1989, 5, 21, 0, 0, 0);
+    assertEquals(timeRange.getFromDate(), from.getTime());
+    assertEquals(timeRange.getToDate(), dt.toDate());
   }
 }

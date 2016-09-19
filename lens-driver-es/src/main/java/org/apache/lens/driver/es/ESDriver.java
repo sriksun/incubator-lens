@@ -48,6 +48,7 @@ import org.apache.lens.server.api.query.cost.FactPartitionBasedQueryCost;
 import org.apache.lens.server.api.query.cost.QueryCost;
 
 import org.apache.commons.lang.Validate;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
@@ -62,13 +63,14 @@ import org.antlr.runtime.tree.Tree;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * Driver for elastic search
  */
 @Slf4j
-public class ESDriver implements LensDriver {
+public class ESDriver extends AbstractLensDriver {
 
   private static final AtomicInteger THID = new AtomicInteger();
   private static final double STREAMING_PARTITION_COST = 0;
@@ -84,7 +86,7 @@ public class ESDriver implements LensDriver {
    */
   private final Map<String, ESQuery> rewrittenQueriesCache = Maps.newConcurrentMap();
   private final Map<QueryHandle, Future<LensResultSet>> resultSetMap = Maps.newConcurrentMap();
-  private final Map<QueryHandle, QueryCompletionListener> handleListenerMap = Maps.newConcurrentMap();
+  private final Map<QueryHandle, QueryContext> handleContextMap = Maps.newConcurrentMap();
 
   @Override
   public Configuration getConf() {
@@ -136,24 +138,20 @@ public class ESDriver implements LensDriver {
 
   @Override
   public LensResultSet execute(QueryContext context) throws LensException {
+    handleContextMap.put(context.getQueryHandle(), context);
     final ESQuery esQuery = rewrite(context);
-    final QueryHandle queryHandle = context.getQueryHandle();
     final ESResultSet resultSet = esClient.execute(esQuery);
-    notifyComplIfRegistered(queryHandle);
+    context.setDriverStatus(DriverQueryStatus.DriverQueryState.SUCCESSFUL);
+    handleContextMap.remove(context.getQueryHandle());
     return resultSet;
   }
 
   @Override
   public void executeAsync(final QueryContext context) {
+    handleContextMap.put(context.getQueryHandle(), context);
     final Future<LensResultSet> futureResult
       = asyncQueryPool.submit(new ESQueryExecuteCallable(context, SessionState.get()));
     resultSetMap.put(context.getQueryHandle(), futureResult);
-  }
-
-  @Override
-  public void registerForCompletionNotification(QueryHandle handle, long timeoutMillis,
-                                                QueryCompletionListener listener) {
-    handleListenerMap.put(handle, listener);
   }
 
   @Override
@@ -193,10 +191,8 @@ public class ESDriver implements LensDriver {
 
   @Override
   public void closeResultSet(QueryHandle handle) throws LensException {
-    try {
+    if (resultSetMap.containsKey(handle)) {
       resultSetMap.remove(handle);
-    } catch (NullPointerException e) {
-      throw new LensException("The query does not exist or was already purged", e);
     }
   }
 
@@ -205,7 +201,7 @@ public class ESDriver implements LensDriver {
     try {
       boolean cancelled = resultSetMap.get(handle).cancel(true);
       if (cancelled) {
-        notifyQueryCancellation(handle);
+        handleContextMap.get(handle).setDriverStatus(DriverQueryStatus.DriverQueryState.CANCELED);
       }
       return cancelled;
     } catch (NullPointerException e) {
@@ -217,7 +213,7 @@ public class ESDriver implements LensDriver {
   public void closeQuery(QueryHandle handle) throws LensException {
     cancelQuery(handle);
     closeResultSet(handle);
-    handleListenerMap.remove(handle);
+    handleContextMap.remove(handle);
   }
 
   @Override
@@ -244,22 +240,6 @@ public class ESDriver implements LensDriver {
   @Override
   public ImmutableSet<WaitingQueriesSelectionPolicy> getWaitingQuerySelectionPolicies() {
     return ImmutableSet.copyOf(Sets.<WaitingQueriesSelectionPolicy>newHashSet());
-  }
-
-  private void notifyComplIfRegistered(QueryHandle queryHandle) {
-    try {
-      handleListenerMap.get(queryHandle).onCompletion(queryHandle);
-    } catch (NullPointerException e) {
-      log.debug("There are no subscriptions for notification. Skipping for {}", queryHandle.getHandleIdString(), e);
-    }
-  }
-
-  private void notifyQueryCancellation(QueryHandle handle) {
-    try {
-      handleListenerMap.get(handle).onError(handle, handle + " cancelled");
-    } catch (NullPointerException e) {
-      log.debug("There are no subscriptions for notification. Skipping for {}", handle.getHandleIdString(), e);
-    }
   }
 
   private ESQuery rewrite(AbstractQueryContext context) throws LensException {
@@ -317,10 +297,11 @@ public class ESDriver implements LensDriver {
   }
 
   @Override
-  public void configure(Configuration conf) throws LensException {
+  public void configure(Configuration conf, String driverType, String driverName) throws LensException {
+    super.configure(conf, driverType, driverName);
     this.conf = new Configuration(conf);
     this.conf.addResource("esdriver-default.xml");
-    this.conf.addResource("esdriver-site.xml");
+    this.conf.addResource(getDriverResourcePath("esdriver-site.xml"));
     config = new ESDriverConfig(this.conf);
     Class klass;
     try {
@@ -341,10 +322,10 @@ public class ESDriver implements LensDriver {
       | InstantiationException
       | IllegalAccessException
       | InvocationTargetException e) {
-      log.error("ES driver cannot start!", e);
+      log.error("ES driver {} cannot start!", getFullyQualifiedName(), e);
       throw new LensException("Cannot start es driver", e);
     }
-    log.debug("ES Driver configured");
+    log.info("ES Driver {} configured", getFullyQualifiedName());
     asyncQueryPool = Executors.newCachedThreadPool(new ThreadFactory() {
       @Override
       public Thread newThread(Runnable runnable) {

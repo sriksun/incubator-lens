@@ -28,7 +28,9 @@ function _executeQuery (secretToken, query, queryName) {
     .then(queryHandle => {
       AppDispatcher.dispatch({
         actionType: AdhocQueryConstants.RECEIVE_QUERY_HANDLE,
-        payload: { queryHandle: queryHandle }
+        payload: { queryHandle: queryHandle.lensAPIResult &&
+          queryHandle.lensAPIResult.data &&
+          queryHandle.lensAPIResult.data.handleId }
       });
     }, (error) => {
       // error details contain array of objects {code, message}
@@ -51,16 +53,52 @@ function _saveQuery (secretToken, user, query, options) {
         payload: {
           type: 'Success',
           text: 'Query was successfully saved!',
-          id: response.id
+          id: response.resourceModifiedResponse && response.resourceModifiedResponse.id
         }
       });
     }, error => {
-      error = error.error;
+      error = error.lensAPIResult.error;
       AppDispatcher.dispatch({
         actionType: AdhocQueryConstants.SAVE_QUERY_FAILED,
         payload: {type: 'Error', text: error.code + ': ' + error.message}
       });
     }).catch(e => { console.error(e); });
+}
+function _getTables (secretToken, database) {
+  AdhocQueryAdapter.getTables(secretToken, database)
+    .then(function (tables) {
+      AppDispatcher.dispatch({
+        actionType: AdhocQueryConstants.RECEIVE_TABLES,
+        payload: { tables: tables, database: database }
+      });
+    }, function (error) {
+      // propagating the error message, couldn't fetch cubes
+      AppDispatcher.dispatch({
+        actionType: AdhocQueryConstants.RECEIVE_TABLES_FAILED,
+        payload: {
+          responseCode: error.status,
+          responseMessage: error.statusText
+        }
+      });
+    });
+}
+function _getCubes (secretToken, database) {
+  AdhocQueryAdapter.getCubes(secretToken)
+    .then(function (cubes) {
+      AppDispatcher.dispatch({
+        actionType: AdhocQueryConstants.RECEIVE_CUBES,
+        payload: { cubes: cubes, database: database }
+      });
+    }, function (error) {
+      // propagating the error message, couldn't fetch cubes
+      AppDispatcher.dispatch({
+        actionType: AdhocQueryConstants.RECEIVE_CUBES_FAILED,
+        payload: {
+          responseCode: error.status,
+          responseMessage: error.statusText
+        }
+      });
+    });
 }
 
 let AdhocQueryActions = {
@@ -81,18 +119,18 @@ let AdhocQueryActions = {
         });
       });
   },
-
-  getCubes (secretToken) {
-    AdhocQueryAdapter.getCubes(secretToken)
-      .then(function (cubes) {
+  setDatabase (secretToken, database) {
+    AdhocQueryAdapter.setDatabase(secretToken, database)
+      .then(function (success) {
         AppDispatcher.dispatch({
-          actionType: AdhocQueryConstants.RECEIVE_CUBES,
-          payload: { cubes: cubes }
+          actionType: AdhocQueryConstants.SELECT_DATABASE,
+          payload: { database: database }
         });
+        _getTables(secretToken, database);
+        _getCubes(secretToken, database);
       }, function (error) {
-        // propagating the error message, couldn't fetch cubes
         AppDispatcher.dispatch({
-          actionType: AdhocQueryConstants.RECEIVE_CUBES_FAILED,
+          actionType: AdhocQueryConstants.SELECT_DATABASE_FAILED,
           payload: {
             responseCode: error.status,
             responseMessage: error.statusText
@@ -100,6 +138,7 @@ let AdhocQueryActions = {
         });
       });
   },
+  getCubes: _getCubes,
 
   getSavedQueries (secretToken, user, options) {
     AdhocQueryAdapter.getSavedQueries(secretToken, user, options)
@@ -123,7 +162,7 @@ let AdhocQueryActions = {
 
   updateSavedQuery (secretToken, user, query, options, id) {
     AdhocQueryAdapter.getParams(secretToken, query).then(response => {
-      let serverParams = response.parameters
+      let serverParams = response.parameterParserResponse.parameters
         .map(item => item.name)
         .sort();
       let clientParams = options && options.parameters && options.parameters
@@ -138,11 +177,11 @@ let AdhocQueryActions = {
               payload: {
                 type: 'Success',
                 text: 'Query was successfully updated!',
-                id: response.id
+                id: response.resourceModifiedResponse && response.resourceModifiedResponse.id
               }
             });
           }, error => {
-            error = error.error;
+            error = error.lensAPIResult.error;
             AppDispatcher.dispatch({
               actionType: AdhocQueryConstants.SAVE_QUERY_FAILED,
               payload: {type: 'Error', text: error.code + ': ' + error.message}
@@ -152,7 +191,7 @@ let AdhocQueryActions = {
         // get parameters' meta
         AppDispatcher.dispatch({
           actionType: AdhocQueryConstants.RECEIVE_QUERY_PARAMS_META,
-          payload: response.parameters
+          payload: response.parameterParserResponse.parameters
         });
       }
     });
@@ -160,7 +199,7 @@ let AdhocQueryActions = {
 
   saveQuery (secretToken, user, query, options) {
     AdhocQueryAdapter.getParams(secretToken, query).then(response => {
-      let serverParams = response.parameters
+      let serverParams = response.parameterParserResponse.parameters
         .map(item => item.name)
         .sort();
       let clientParams = options && options.parameters && options.parameters
@@ -173,7 +212,7 @@ let AdhocQueryActions = {
         // get parameters' meta
         AppDispatcher.dispatch({
           actionType: AdhocQueryConstants.RECEIVE_QUERY_PARAMS_META,
-          payload: response.parameters
+          payload: response.parameterParserResponse.parameters
         });
       }
     }, error => {
@@ -191,7 +230,7 @@ let AdhocQueryActions = {
   // as we can't run a query with params, it needs to be saved first.
   runQuery (secretToken, query, queryName) {
     AdhocQueryAdapter.getParams(secretToken, query).then(response => {
-      if (!response.parameters.length) {
+      if (!response.parameterParserResponse.parameters) {
         _executeQuery(secretToken, query, queryName);
       } else {
         // ask user to save the query maybe?
@@ -214,12 +253,12 @@ let AdhocQueryActions = {
     });
   },
 
-  getCubeDetails (secretToken, cubeName) {
+  getCubeDetails (secretToken, databaseName, cubeName) {
     AdhocQueryAdapter.getCubeDetails(secretToken, cubeName)
       .then(function (cubeDetails) {
         AppDispatcher.dispatch({
           actionType: AdhocQueryConstants.RECEIVE_CUBE_DETAILS,
-          payload: { cubeDetails: cubeDetails }
+          payload: {database: databaseName, cubeDetails: cubeDetails }
         });
       }, function (error) {
         AppDispatcher.dispatch({
@@ -249,13 +288,48 @@ let AdhocQueryActions = {
         });
       });
   },
-
+  getQueryHandles (secretToken, email, options) {
+    AdhocQueryAdapter.getQueryHandles(secretToken, email, options)
+      .then(function (handles) {
+        AppDispatcher.dispatch({
+          actionType: AdhocQueryConstants.RECEIVE_QUERY_HANDLES,
+          payload: { handles: handles }
+        });
+      }, function (error) {
+        AppDispatcher.dispatch({
+          actionType: AdhocQueryConstants.RECEIVE_QUERY_HANDLES_FAILED,
+          payload: {
+            responseCode: error.status,
+            responseMessage: error.statusText
+          }
+        });
+      });
+  },
+  getQueriesDetails (secretToken, handles) {
+    if (handles && handles.length) {
+      AdhocQueryAdapter.getQueriesDetails(secretToken, handles)
+        .then(function (queries) {
+          AppDispatcher.dispatch({
+            actionType: AdhocQueryConstants.RECEIVE_QUERIES,
+            payload: {queries: queries}
+          });
+        }, function (error) {
+          AppDispatcher.dispatch({
+            actionType: AdhocQueryConstants.RECEIVE_QUERIES_FAILED,
+            payload: {
+              responseCode: error.status,
+              responseMessage: error.statusText
+            }
+          });
+        });
+    }
+  },
   getQuery (secretToken, handle) {
     AdhocQueryAdapter.getQuery(secretToken, handle)
       .then(function (query) {
         AppDispatcher.dispatch({
           actionType: AdhocQueryConstants.RECEIVE_QUERY,
-          payload: { query: query }
+          payload: { query: query.lensQuery }
         });
       }, function (error) {
         AppDispatcher.dispatch({
@@ -276,10 +350,9 @@ let AdhocQueryActions = {
           // persistent
           payload = { downloadURL: result, type: 'PERSISTENT', handle: handle };
         } else if (Object.prototype.toString.call(result).match('Array')) {
-          // in-memory gives array
           payload = {
-            queryResult: result[0],
-            columns: result[1],
+            queryResult: result[0].inMemoryQueryResult,
+            columns: result[1].queryResultSetMetadata,
             handle: handle,
             type: 'INMEMORY'
           };
@@ -299,24 +372,7 @@ let AdhocQueryActions = {
       });
   },
 
-  getTables (secretToken, database) {
-    AdhocQueryAdapter.getTables(secretToken, database)
-      .then(function (tables) {
-        AppDispatcher.dispatch({
-          actionType: AdhocQueryConstants.RECEIVE_TABLES,
-          payload: { tables: tables, database: database }
-        });
-      }, function (error) {
-        // propagating the error message, couldn't fetch cubes
-        AppDispatcher.dispatch({
-          actionType: AdhocQueryConstants.RECEIVE_TABLES_FAILED,
-          payload: {
-            responseCode: error.status,
-            responseMessage: error.statusText
-          }
-        });
-      });
-  },
+  getTables: _getTables,
 
   getTableDetails (secretToken, tableName, database) {
     AdhocQueryAdapter.getTableDetails(secretToken, tableName, database)
@@ -349,14 +405,13 @@ let AdhocQueryActions = {
           payload: { queryHandle: handle }
         });
       }, (error) => {
-        // error response contains an error XML with code, message and
-        // stacktrace
+        error = error.lensAPIResult.error;
         AppDispatcher.dispatch({
           actionType: AdhocQueryConstants.RECEIVE_QUERY_HANDLE_FAILED,
           payload: {
             type: 'Error',
-            text: error.getElementsByTagName('code')[0].textContent + ': ' +
-              error.getElementsByTagName('message')[0].textContent
+            text: error.code + ': ' +
+              error.message
           }
         });
       });

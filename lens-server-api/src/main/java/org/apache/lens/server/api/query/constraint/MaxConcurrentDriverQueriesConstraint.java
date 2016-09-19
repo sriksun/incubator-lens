@@ -19,29 +19,88 @@
 
 package org.apache.lens.server.api.query.constraint;
 
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.lens.api.Priority;
 import org.apache.lens.server.api.driver.LensDriver;
 import org.apache.lens.server.api.query.QueryContext;
 import org.apache.lens.server.api.query.collect.EstimatedImmutableQueryCollection;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
+@RequiredArgsConstructor
 public class MaxConcurrentDriverQueriesConstraint implements QueryLaunchingConstraint {
 
   private final int maxConcurrentQueries;
-
-  public MaxConcurrentDriverQueriesConstraint(final int maxConcurrentQueries) {
-    this.maxConcurrentQueries = maxConcurrentQueries;
-  }
+  private final Map<String, Integer> maxConcurrentQueriesPerQueue;
+  private final Map<Priority, Integer> maxConcurrentQueriesPerPriority;
+  private final Integer defaultMaxConcurrentQueriesPerQueueLimit;
+  private final int maxConcurrentLaunches;
 
   @Override
   public boolean allowsLaunchOf(
     final QueryContext candidateQuery, final EstimatedImmutableQueryCollection launchedQueries) {
 
     final LensDriver selectedDriver = candidateQuery.getSelectedDriver();
-    final boolean canLaunch = (launchedQueries.getQueriesCount(selectedDriver) < maxConcurrentQueries);
-
+    final Set<QueryContext> driverLaunchedQueries = launchedQueries.getQueries(selectedDriver);
+    final boolean canLaunch = (launchedQueries.getQueriesCount(selectedDriver) < maxConcurrentQueries)
+      && (getIsLaunchingCount(driverLaunchedQueries) < maxConcurrentLaunches)
+      && canLaunchWithQueueConstraint(candidateQuery, driverLaunchedQueries)
+      && canLaunchWithPriorityConstraint(candidateQuery, driverLaunchedQueries);
     log.debug("canLaunch:{}", canLaunch);
     return canLaunch;
+  }
+
+  private boolean canLaunchWithQueueConstraint(QueryContext candidateQuery, Set<QueryContext> launchedQueries) {
+    if (maxConcurrentQueriesPerQueue == null) {
+      return true;
+    }
+    String queue = candidateQuery.getQueue();
+    Integer limit = maxConcurrentQueriesPerQueue.get(queue);
+    if (limit == null) {
+      if (defaultMaxConcurrentQueriesPerQueueLimit != null) { //Check if any default limit is enabled for all queues
+        limit = defaultMaxConcurrentQueriesPerQueueLimit;
+      } else {
+        return true;
+      }
+    }
+    int launchedOnQueue = 0;
+    for (QueryContext context : launchedQueries) {
+      if (context.getQueue().equals(queue)) {
+        launchedOnQueue++;
+      }
+    }
+    return launchedOnQueue < limit;
+  }
+
+  private boolean canLaunchWithPriorityConstraint(QueryContext candidateQuery, Set<QueryContext> launchedQueries) {
+    if (maxConcurrentQueriesPerPriority == null) {
+      return true;
+    }
+    Priority priority = candidateQuery.getPriority();
+    Integer limit = maxConcurrentQueriesPerPriority.get(priority);
+    if (limit == null) {
+      return true;
+    }
+    int launchedOnPriority = 0;
+    for (QueryContext context : launchedQueries) {
+      if (context.getPriority().equals(priority)) {
+        launchedOnPriority++;
+      }
+    }
+    return launchedOnPriority < limit;
+  }
+
+  private int getIsLaunchingCount(final Set<QueryContext> launchedQueries) {
+    int launcherCount = 0;
+    for (QueryContext ctx : launchedQueries) {
+      if (ctx.isLaunching()) {
+        launcherCount++;
+      }
+    }
+    return  launcherCount;
   }
 }

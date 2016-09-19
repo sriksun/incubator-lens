@@ -21,7 +21,9 @@ package org.apache.lens.driver.jdbc;
 import static org.apache.hadoop.hive.ql.parse.HiveParser.*;
 
 import java.util.*;
+import java.util.regex.Pattern;
 
+import org.apache.lens.api.util.CommonUtils;
 import org.apache.lens.cube.metadata.CubeMetastoreClient;
 import org.apache.lens.cube.parse.CubeSemanticAnalyzer;
 import org.apache.lens.cube.parse.HQLParser;
@@ -64,9 +66,6 @@ public class ColumnarSQLRewriter implements QueryRewriter {
   /** The query. */
   protected String query;
 
-  /** The final fact query. */
-  private String finalFactQuery;
-
   /** The limit. */
   private String limit;
 
@@ -85,9 +84,6 @@ public class ColumnarSQLRewriter implements QueryRewriter {
   /** The rewritten query. */
   protected StringBuilder rewrittenQuery = new StringBuilder();
 
-  /** The merged query. */
-  protected StringBuilder mergedQuery = new StringBuilder();
-
   /** The fact filters for push down */
   protected StringBuilder factFilterPush = new StringBuilder();
 
@@ -102,9 +98,6 @@ public class ColumnarSQLRewriter implements QueryRewriter {
 
   /** The agg column. */
   protected List<String> aggColumn = new ArrayList<String>();
-
-  /** The filter in join cond. */
-  protected List<String> filterInJoinCond = new ArrayList<String>();
 
   /** The right filter. */
   protected List<String> rightFilter = new ArrayList<String>();
@@ -176,7 +169,7 @@ public class ColumnarSQLRewriter implements QueryRewriter {
   /** The from ast. */
   @Getter
   protected ASTNode fromAST;
-  private HashMap<String, String> regexReplaceMap = new HashMap<>();
+  private Map<String, String> regexReplaceMap;
 
   /**
    * Instantiates a new columnar sql rewriter.
@@ -186,14 +179,7 @@ public class ColumnarSQLRewriter implements QueryRewriter {
 
   @Override
   public void init(Configuration conf) {
-    if (conf.get(JDBCDriverConfConstants.REGEX_REPLACEMENT_VALUES) != null) {
-      for (String kv : conf.get(JDBCDriverConfConstants.REGEX_REPLACEMENT_VALUES).split("(?<!\\\\),")) {
-        String[] kvArray = kv.split("=");
-        String key = kvArray[0].replaceAll("\\\\,", ",").trim();
-        String value = kvArray[1].replaceAll("\\\\,", ",").trim();
-        regexReplaceMap.put(key, value);
-      }
-    }
+    regexReplaceMap = CommonUtils.parseMapFromString(conf.get(JDBCDriverConfConstants.REGEX_REPLACEMENT_VALUES));
   }
 
   public String getClause() {
@@ -218,7 +204,7 @@ public class ColumnarSQLRewriter implements QueryRewriter {
 
     QB qb = new QB(null, null, false);
 
-    if (!c1.doPhase1(ast, qb, c1.initPhase1Ctx())) {
+    if (!c1.doPhase1(ast, qb, c1.initPhase1Ctx(), null)) {
       return;
     }
 
@@ -673,7 +659,10 @@ public class ColumnarSQLRewriter implements QueryRewriter {
           .replaceAll("[(,)]", "");
         String dimJoinKeys = HQLParser.getString(right).replaceAll("\\s+", "")
           .replaceAll("[(,)]", "");
-        String dimTableName = dimJoinKeys.substring(0, dimJoinKeys.indexOf("__"));
+        int dimTableDelimIndex = dimJoinKeys.indexOf("__");
+        String dimTableName = dimJoinKeys.substring(0, dimTableDelimIndex);
+        String dimAlias = dimJoinKeys.
+            substring(dimTableDelimIndex + 3, dimJoinKeys.indexOf('.')).trim();
 
         // Construct part of subquery by referring join condition
         // fact.fact_key = dim_table.dim_key
@@ -691,14 +680,16 @@ public class ColumnarSQLRewriter implements QueryRewriter {
         // Check the occurrence of dimension table in the filter list and
         // combine all filters of same dimension table with and .
         // eg. "dim_table.key1 = 'abc' and dim_table.key2 = 'xyz'"
-        if (setAllFilters.toString().matches("(.*)" + dimTableName + "(.*)")) {
+        if (setAllFilters.toString().replaceAll("\\s+", "")
+            .matches("(.*)" + dimAlias + "(.*)")) {
 
           factFilters.delete(0, factFilters.length());
 
           // All filters in where clause
           for (int i = 0; i < setAllFilters.toArray().length; i++) {
 
-            if (setAllFilters.toArray()[i].toString().matches("(.*)" + dimTableName + ("(.*)"))) {
+            if (setAllFilters.toArray()[i].toString().replaceAll("\\s+", "")
+                .matches("(.*)" + dimAlias + ("(.*)"))) {
               String filters2 = setAllFilters.toArray()[i].toString();
               filters2 = filters2.replaceAll(
                 getTableOrAlias(filters2, "alias"),
@@ -769,8 +760,9 @@ public class ColumnarSQLRewriter implements QueryRewriter {
         String alias = "alias" + String.valueOf(count);
         String allaggmeasures = aggmeasures.append(measure).append(" as ").append(alias).toString();
         String aggColAlias = funident + "(" + alias + ")";
-
-        mapAggTabAlias.put(measure, aggColAlias);
+        String measureRegex = "\\s*" + Pattern.quote(funident)
+          + "\\s*\\(\\s*\\Q" + aggCol.replaceAll("\\s+", "\\\\E\\\\s+\\\\Q") + "\\E\\s*\\)\\s*";
+        mapAggTabAlias.put(measureRegex, aggColAlias);
         if (!aggColumn.contains(allaggmeasures)) {
           aggColumn.add(allaggmeasures);
         }
@@ -1051,13 +1043,13 @@ public class ColumnarSQLRewriter implements QueryRewriter {
     // sub query query to the outer query
 
     for (Map.Entry<String, String> entry : mapAggTabAlias.entrySet()) {
-      selectTree = selectTree.replace(entry.getKey(), entry.getValue());
+      selectTree = selectTree.replaceAll(entry.getKey(), entry.getValue());
 
       if (orderByTree != null) {
-        orderByTree = orderByTree.replace(entry.getKey(), entry.getValue());
+        orderByTree = orderByTree.replaceAll(entry.getKey(), entry.getValue());
       }
       if (havingTree != null) {
-        havingTree = havingTree.replace(entry.getKey(), entry.getValue());
+        havingTree = havingTree.replaceAll(entry.getKey(), entry.getValue());
       }
     }
     //for subquery with count function should be replaced with sum in outer query
@@ -1336,7 +1328,7 @@ public class ColumnarSQLRewriter implements QueryRewriter {
               tabNameChild.insertChild(0, dbIdentifier);
             }
           }
-        } catch (HiveException e) {
+        } catch (LensException | HiveException e) {
           log.warn("No corresponding table in metastore:", e);
         }
       }
@@ -1385,7 +1377,7 @@ public class ColumnarSQLRewriter implements QueryRewriter {
   /**
    * Gets the underlying db name.
    *
-   * @param table the table
+   * @param tbl the table
    * @return the underlying db name
    * @throws HiveException the hive exception
    */
@@ -1396,7 +1388,7 @@ public class ColumnarSQLRewriter implements QueryRewriter {
   /**
    * Gets the underlying table name.
    *
-   * @param table the table
+   * @param tbl the table
    * @return the underlying table name
    * @throws HiveException the hive exception
    */

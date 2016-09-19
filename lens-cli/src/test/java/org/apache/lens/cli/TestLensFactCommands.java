@@ -31,6 +31,7 @@ import org.apache.lens.cli.commands.LensCubeCommands;
 import org.apache.lens.cli.commands.LensFactCommands;
 import org.apache.lens.client.LensClient;
 
+import org.testng.annotations.AfterTest;
 import org.testng.annotations.Test;
 
 import lombok.extern.slf4j.Slf4j;
@@ -95,6 +96,16 @@ public class TestLensFactCommands extends LensCliApplicationTest {
     return cubeCommands;
   }
 
+  @AfterTest
+  public void cleanUp() {
+    if (command != null) {
+      command.getClient().closeConnection();
+    }
+    if (cubeCommands != null) {
+      cubeCommands.getClient().closeConnection();
+    }
+  }
+
   /**
    * Adds the fact1 table.
    *
@@ -151,6 +162,10 @@ public class TestLensFactCommands extends LensCliApplicationTest {
       xmlContent = xmlContent.replace("<property name=\"fact1.prop\" value=\"f1\"/>\n",
         "<property name=\"fact1.prop\" value=\"f1\"/>" + "\n<property name=\"fact1.prop1\" value=\"f2\"/>\n");
 
+      xmlContent = xmlContent.replace("<column comment=\"\" name=\"measure3\" _type=\"FLOAT\"/>",
+          "<column comment=\"\" name=\"measure3\" _type=\"FLOAT\"/>"
+              + "\n<column comment=\"\" name=\"measure4\" _type=\"FLOAT\" start_time=\"2015-01-01\"/>\n");
+
       File newFile = new File("target/local-fact1.xml");
       Writer writer = new OutputStreamWriter(new FileOutputStream(newFile));
       writer.write(xmlContent);
@@ -158,9 +173,9 @@ public class TestLensFactCommands extends LensCliApplicationTest {
 
       String desc = command.describeFactTable("fact1");
       log.debug(desc);
-      String propString = "name : fact1.prop  value : f1";
-      String propString1 = "name : fact1.prop1  value : f2";
-
+      String propString = "fact1.prop: f1";
+      String propString1 = "fact1.prop1: f2";
+      String propStringColStartTime = "cube.fact.col.start.time.measure4: 2015-01-01";
       assertTrue(desc.contains(propString));
 
       command.updateFactTable("fact1", new File("target/local-fact1.xml"));
@@ -168,6 +183,7 @@ public class TestLensFactCommands extends LensCliApplicationTest {
       log.debug(desc);
       assertTrue(desc.contains(propString), "The sample property value is not set");
       assertTrue(desc.contains(propString1), "The sample property value is not set");
+      assertTrue(desc.contains(propStringColStartTime), "The sample property value is not set");
 
       newFile.delete();
 

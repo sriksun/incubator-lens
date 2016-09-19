@@ -24,7 +24,7 @@
 <configuration>
   <property>
     <name>lens.server.drivers</name>
-    <value>org.apache.lens.driver.hive.HiveDriver</value>
+    <value>hive:org.apache.lens.driver.hive.HiveDriver</value>
     <description>Drivers enabled for this lens server instance</description>
   </property>
 
@@ -55,7 +55,7 @@
 
   <property>
     <name>lens.server.servicenames</name>
-    <value>session,query,metastore,scheduler,quota</value>
+    <value>session,alarm,query,savedquery,metastore,scheduler,quota</value>
     <description>These services would be started in the specified order when lens-server starts up</description>
   </property>
 
@@ -90,8 +90,14 @@
   </property>
 
   <property>
+    <name>lens.server.alarm.service.impl</name>
+    <value>org.apache.lens.server.scheduler.AlarmService</value>
+    <description>Implementation class for alarm service</description>
+  </property>
+
+  <property>
     <name>lens.server.scheduler.service.impl</name>
-    <value>org.apache.lens.server.scheduler.QuerySchedulerServiceImpl</value>
+    <value>org.apache.lens.server.scheduler.SchedulerServiceImpl</value>
     <description>Implementation class for query scheduler service</description>
   </property>
 
@@ -99,30 +105,6 @@
     <name>lens.server.base.url</name>
     <value>http://0.0.0.0:9999/lensapi/</value>
     <description>The base url for the lens server</description>
-  </property>
-
-  <property>
-    <name>lens.server.ui.base.uri</name>
-    <value>http://0.0.0.0:19999/</value>
-    <description>The base url for the Lens UI Server</description>
-  </property>
-
-  <property>
-    <name>lens.server.ui.static.dir</name>
-    <value>webapp/lens-server/static</value>
-    <description>The base directory to server UI static files from</description>
-  </property>
-
-  <property>
-    <name>lens.server.ui.enable</name>
-    <value>true</value>
-    <description>Bringing up the ui server is optional. By default it brings up UI server.</description>
-  </property>
-
-  <property>
-    <name>lens.server.ui.enable.caching</name>
-    <value>true</value>
-    <description>Set this to false to disable static file caching in the UI server</description>
   </property>
 
   <property>
@@ -209,19 +191,18 @@
   </property>
 
   <property>
-    <name>lens.server.restart.enabled</name>
+    <name>lens.server.state.persistence.enabled</name>
     <value>true</value>
-    <description>If flag is enabled, all the services will be persisted to persistent
-      location passed.
+    <description>If flag is enabled, state of all the services will be persisted periodically to a location
+      specified by lens.server.persist.location and on server restart all the services will be started
+      from last saved state.
     </description>
   </property>
 
   <property>
-    <name>lens.server.recover.onrestart</name>
-    <value>true</value>
-    <description>If the flag is enabled, all the services will be started from last
-      saved state, if disabled all the services will start afresh
-    </description>
+    <name>lens.server.state.persistence.interval.millis</name>
+    <value>300000</value>
+    <description>Lens server state persistence time interval in milliseconds</description>
   </property>
 
   <property>
@@ -308,6 +289,16 @@
     <value>10000</value>
     <description>The interval(milliseconds) with which purger to run periodically. Default 10 sec. </description>
   </property>
+
+  <property>
+    <name>lens.server.inmemory.resultset.ttl.secs</name>
+    <value>300</value>
+    <description>This property defines the TTL(time to live) in seconds for all result sets of type InMemoryResultSet
+     beyond which they are eligible for purging irrespective of whether the result set has been read or not.
+     The default value is 300 seconds (5 minutes).
+     </description>
+  </property>
+
   <property>
     <name>lens.server.domain</name>
     <value>company.com</value>
@@ -349,11 +340,6 @@
       {{{http://stackoverflow.com/questions/10684244/dbcp-validationquery-for-different-databases}validationquery for different databases}} \
     </description>
   </property>
-  <property>
-    <name>lens.server.snapshot.interval</name>
-    <value>300000</value>
-    <description>Snapshot interval time in miliseconds for saving lens server state.</description>
-  </property>
 
   <property>
     <name>lens.server.mail.from.address</name>
@@ -391,7 +377,7 @@
 
   <property>
     <name>lens.server.ws.resourcenames</name>
-    <value>session,metastore,query,quota,scheduler,index,log</value>
+    <value>session,metastore,query,savedquery,quota,scheduler,index,log</value>
     <description>These JAX-RS resources would be started in the specified order when lens-server starts up</description>
   </property>
 
@@ -445,7 +431,7 @@
 
   <property>
     <name>lens.server.ws.featurenames</name>
-    <value>multipart</value>
+    <value>multipart,moxyjson,moxyjsonconfigresovler</value>
     <description>These JAX-RS Feature(s) would be started in the specified order when lens-server starts up
     </description>
   </property>
@@ -457,15 +443,25 @@
   </property>
 
   <property>
+    <name>lens.server.moxyjson.ws.feature.impl</name>
+    <value>org.glassfish.jersey.moxy.json.MoxyJsonFeature</value>
+    <description>Enable Moxy json feature </description>
+  </property>
+  <property>
+    <name>lens.server.moxyjsonconfigresovler.ws.feature.impl</name>
+    <value>org.apache.lens.api.util.MoxyJsonConfigurationContextResolver</value>
+    <description>Moxy json configuration resolver</description>
+  </property>
+  <property>
     <name>lens.server.ws.filternames</name>
-    <value>authentication,consistentState,serverMode</value>
+    <value>requestlogger,consistentState,serverMode</value>
     <description>These JAX-RS filters would be started in the specified order when lens-server starts up</description>
   </property>
 
   <property>
-    <name>lens.server.authentication.ws.filter.impl</name>
-    <value>org.apache.lens.server.AuthenticationFilter</value>
-    <description>Implementation class for Authentication Filter</description>
+    <name>lens.server.requestlogger.ws.filter.impl</name>
+    <value>org.apache.lens.server.LensRequestLoggingFilter</value>
+    <description>Implementation class for Request logging Filter</description>
   </property>
 
   <property>
@@ -508,6 +504,15 @@
     <value>false</value>
     <description>Disable the log direction on the lens server sessions. There are no logs required for each session in
       lens sessions. This will decrease number of file handles associated to lens server.
+    </description>
+  </property>
+
+  <property>
+    <name>hive.server2.logging.operation.enabled</name>
+    <value>false</value>
+    <description>Disable the operation logging, since there are no execution operation happening in lens session.
+      Keeping it true might conflict with Hive Server if both are running on the same machine causing disappearance
+      of the operation log directory.
     </description>
   </property>
 
@@ -749,6 +754,28 @@
   </property>
 
   <property>
+    <name>lens.server.launcher.pool.min.threads</name>
+    <value>3</value>
+    <description>Minimum number of threads in the query launcher thread pool</description>
+  </property>
+
+  <property>
+    <name>lens.server.launcher.pool.max.threads</name>
+    <value>100</value>
+    <description>Maximum number of threads in the query launcher thread pool. Keeping the default to hundred, we may
+      never grow till there, it would go to max for concurrrent queries allowed on all drivers together.
+      This value should be greater than the max concurrent queries allowed on all drivers. </description>
+  </property>
+
+  <property>
+    <name>lens.server.launcher.pool.keepalive.millis</name>
+    <value>60000</value>
+    <description>Thread keep alive time in milliseconds for the query launcher thread pool.
+      If there are no query launches for this period,then cached threads will be released from the pool.
+    </description>
+  </property>
+
+  <property>
     <name>lens.server.session.expiry.service.interval.secs</name>
     <value>3600</value>
     <description>Interval at which lens session expiry service runs</description>
@@ -806,5 +833,76 @@
     <value>20</value>
     <description>Key denoting the default fetch value of saved query list api.</description>
   </property>
+  <property>
+    <name>lens.server.max.sessions.per.user</name>
+    <value>10</value>
+    <description>Number of sessions can be allowed for each user.
+      User has to close one of the active sessions to open a new session once limit is reached. Otherwise Server throws
+      an exception by saying that opened session limit has been already reached for user.
+    </description>
+  </property>
+  <property>
+    <name>lens.server.status.update.num.retries</name>
+    <value>10</value>
+    <description>The number of retries a status update will tried with exponentital back off, in case of transient
+      issues, upon which query will be marked FAILED.
+    </description>
+  </property>
+  <property>
+    <name>lens.server.status.update.maximum.delay.secs</name>
+    <value>1800</value>
+    <description>The maximum delay in seconds for next status update to happen after any transient failure. This will
+      be used a maximum delay sothat exponential wait times not to grow to bigger value.
+    </description>
+  </property>
+  <property>
+    <name>lens.server.duplicate.query.allowed</name>
+    <value>false</value>
+    <description>If this is false and same query is submitted by a user in the same session
+      and with the same configuration while earlier query is not completed then
+      lens server will return the handle of the previous query
+    </description>
+  </property>
+   <property>
+    <name>lens.server.scheduler.store.class</name>
+    <value>org.apache.lens.server.scheduler.SchedulerDAO$SchedulerHsqlDBStore</value>
+    <description>A subclass of SchedulerDBStore class used for storing scheduler related information.
+    </description>
+  </property>
+  <property>
+    <name>lens.server.status.update.exponential.wait.millis</name>
+    <value>30000</value>
+    <description>Number of millis that would grow exponentially for next update, incase of transient failures.
+    </description>
+  </property>
+  <property>
+    <name>lens.query.current.time.millis</name>
+    <value>0</value>
+    <description>Query current time in millis. This is used to resolve 'now'. If value is set to zero, 'now' is
+     resolved to current value</description>
+  </property>
 
+  <property>
+    <name>lens.server.http.notification.conn.timeout.millis</name>
+    <value>5000</value>
+    <description>This is the connection timeout for all HTTP Notifications sent by lens server.
+      Default connection timeout is 5 secs</description>
+  </property>
+  <property>
+    <name>lens.server.http.notification.read.timeout.millis</name>
+    <value>10000</value>
+    <description>This is the read timeout for all HTTP Notifications sent by lens server.
+      Default read timeout is 10 secs</description>
+  </property>
+
+  <property>
+    <name>lens.server.grizzly.core.pool.size</name>
+    <value>20</value>
+    <description>Core pool size for lens grizzly server</description>
+  </property>
+  <property>
+    <name>lens.server.grizzly.max.pool.size</name>
+    <value>40</value>
+    <description>Max pool size for lens grizzly server</description>
+  </property>
 </configuration>

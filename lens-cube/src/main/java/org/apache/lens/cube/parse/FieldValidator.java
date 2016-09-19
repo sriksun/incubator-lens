@@ -24,12 +24,11 @@ import org.apache.lens.cube.error.ConflictingFields;
 import org.apache.lens.cube.error.FieldsCannotBeQueriedTogetherException;
 import org.apache.lens.cube.metadata.CubeInterface;
 import org.apache.lens.cube.metadata.DerivedCube;
-import org.apache.lens.cube.metadata.ReferencedDimAtrribute;
-import org.apache.lens.cube.metadata.ReferencedDimAtrribute.ChainRefCol;
+import org.apache.lens.cube.metadata.ReferencedDimAttribute;
+import org.apache.lens.cube.metadata.ReferencedDimAttribute.ChainRefCol;
 import org.apache.lens.cube.parse.ExpressionResolver.ExprSpecContext;
 import org.apache.lens.server.api.error.LensException;
 
-import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
 
@@ -54,11 +53,7 @@ public class FieldValidator implements ContextRewriter {
     if (!cube.allFieldsQueriable()) {
       // do queried field validation
       List<DerivedCube> dcubes;
-      try {
-        dcubes = cubeql.getMetastoreClient().getAllDerivedQueryableCubes(cube);
-      } catch (HiveException e) {
-        throw new LensException(e);
-      }
+      dcubes = cubeql.getMetastoreClient().getAllDerivedQueryableCubes(cube);
 
       ImmutableSet<String> queriedTimeDimCols = cubeql.getQueriedTimeDimCols();
 
@@ -166,9 +161,8 @@ public class FieldValidator implements ContextRewriter {
 
               // If this is a referenced dim attribute leading to a chain, then instead of adding this
               // column, we add the source columns of the chain.
-              if (cube.getDimAttributeByName(colName) instanceof ReferencedDimAtrribute
-                && ((ReferencedDimAtrribute) cube.getDimAttributeByName(colName)).isChainedColumn()) {
-                ReferencedDimAtrribute rdim = (ReferencedDimAtrribute) cube.getDimAttributeByName(colName);
+              if (cube.getDimAttributeByName(colName) instanceof ReferencedDimAttribute) {
+                ReferencedDimAttribute rdim = (ReferencedDimAttribute) cube.getDimAttributeByName(colName);
                 for (ChainRefCol refCol : rdim.getChainRefColumns()) {
                   chainSourceColumns.addAll(cube.getChainByName(refCol.getChainName()).getSourceColumns());
                 }

@@ -213,6 +213,60 @@
     </description>
   </property>
 
+  <property>
+    <name>lens.query.prefetch.inmemory.resultset</name>
+    <value>true</value>
+    <description>When set to true, specified number of rows of result set will be pre-fetched if the result set is of
+    type InMemoryResultSet and query execution is not asynchronous i.e. query should be launched with
+    operation as EXECUTE_WITH_TIMEOUT.
+    Suggested usage of this property: It can be used by client to stream as well as persist results in server for
+    queries that finish fast and produce results with fewer rows (should be less than number of rows pre-fetched).
+    Note that the results are streamed to the client early, without waiting for persistence to finish.
+    Default value of this property is true.
+    </description>
+  </property>
+
+  <property>
+    <name>lens.query.prefetch.inmemory.resultset.rows</name>
+    <value>100</value>
+    <description>Specifies the number of rows to pre-fetch when lens.query.prefetch.inmemory.resultset is set to true.
+    Default value is 100 rows.
+    </description>
+  </property>
+
+  <property>
+    <name>lens.query.cancel.on.timeout</name>
+    <value>true</value>
+    <description>Specifies whether to attempt cancellation of a query whose execution takes longer than the timeout
+    value specified while submitting the query for execution. The default value is true.
+    </description>
+  </property>
+
+  <property>
+    <name>lens.query.http.notification.mediatype</name>
+    <value>application/json</value>
+    <description>This is the media type for Query Http notifications. Accepted types are "application/json" and
+      "application/xml". The default value is "application/json"</description>
+  </property>
+
+  <property>
+    <name>lens.query.http.notification.type.FINISHED</name>
+    <value>false</value>
+    <description>Setting this property to true will enable query FINISHED notifications which includes
+      SUCCESSFUL, FAILED and CANCELLED queries. The notification will have eventtype = "FINISHED",
+      eventtime = long event time and query = org.apache.lens.api.query.LensQuery instance. The mediatype for
+      eventtype and eventtime will be TEXT/PLAIN and the mediatype for query will be based on property
+      lens.query.http.notification.mediatype. Default value of this property is false. </description>
+  </property>
+
+  <property>
+    <name>lens.query.http.notification.urls</name>
+    <value></value>
+    <description>These are the http end points for Query http notifications. Users can specify more than one comma
+      separated end points for a query. If this property is not set, no http notification will be sent out by lens
+      server for the query.</description>
+  </property>
+
   <!--  properties for session -->
   <property>
     <name>lens.session.aux.jars</name>
@@ -309,6 +363,12 @@
     <name>lens.cube.query.fail.if.data.partial</name>
     <value>true</value>
     <description>Whether to fail the query of data is partial</description>
+  </property>
+
+  <property>
+    <name>lens.session.metastore.exclude.cubetables.from.nativetables</name>
+    <value>true</value>
+    <description>Exclude cube related tables when fetching native tables</description>
   </property>
 
 </configuration>
