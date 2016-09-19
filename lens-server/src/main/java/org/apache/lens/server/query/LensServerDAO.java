@@ -92,7 +92,7 @@ public class LensServerDAO {
       + "starttime bigint, " + "endtime bigint," + "result varchar(255)," + "status varchar(255), "
       + "metadata varchar(100000), " + "rows int, " + "filesize bigint, " + "errormessage varchar(10000), "
       + "driverstarttime bigint, " + "driverendtime bigint, " + "drivername varchar(10000), "
-      + "queryname varchar(255), " + "submissiontime bigint" + "driverquery varchar(1000000), "
+      + "queryname varchar(255), " + "submissiontime bigint, " + "driverquery varchar(1000000), "
       + "conf varchar(100000))";
     try {
       QueryRunner runner = new QueryRunner(ds);
