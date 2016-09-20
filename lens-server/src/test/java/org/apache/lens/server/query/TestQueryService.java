@@ -1952,7 +1952,7 @@ public class TestQueryService extends LensJerseyTest {
 
     QueryHandleWithResultSet result = target.request(MediaType.APPLICATION_XML_TYPE)
       .post(Entity.entity(mp, MediaType.MULTIPART_FORM_DATA_TYPE),
-      new GenericType<LensAPIResult<QueryHandleWithResultSet>>() {}).getData();
+        new GenericType<LensAPIResult<QueryHandleWithResultSet>>() {}).getData();
     assertNotNull(result.getQueryHandle());
     assertNotNull(result.getResult());
 
