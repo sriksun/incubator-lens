@@ -2588,7 +2588,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       Set<Status> statuses = getStatuses(states);
       List<QueryHandle> inMemoryHandles = getQueriesInMemory(statuses, userName, driver, queryName,
         fromTime, toTime);
-      List<LensQuery> result = new ArrayList<>();
+      Set<LensQuery> result = new HashSet<>();
       for (QueryHandle handle : inMemoryHandles) {
         QueryContext ctx = allQueries.get(handle);
         if (ctx == null) {
@@ -2601,7 +2601,7 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
         fromTime, toTime, statuses);
       result.addAll(persistedQueries);
 
-      return result;
+      return new ArrayList<>(result);
     } finally {
       release(sessionHandle);
     }
@@ -2639,8 +2639,9 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
       List<QueryHandle> persistedQueries = getPersistedQueryHandles(userName, driver, queryName,
         fromTime, toTime, statuses);
 
-      result.addAll(persistedQueries);
-      return result;
+      HashSet<QueryHandle> deduplicatedResults = new HashSet<>(result);
+      deduplicatedResults.addAll(persistedQueries);
+      return new ArrayList<>(deduplicatedResults);
     } finally {
       release(sessionHandle);
     }

@@ -1961,7 +1961,8 @@ public class TestQueryService extends LensJerseyTest {
       .queryParam("sessionid", lensSessionId)
       .request(MediaType.APPLICATION_XML_TYPE)
       .get(new GenericType<List<LensQuery>>(){});
-    Assert.assertFalse(results.isEmpty());
+    Assert.assertNotNull(results);
+    Assert.assertEquals(1, results.size());
     Assert.assertEquals(queryName.toString(), results.get(0).getQueryName());
     Assert.assertEquals(result.getQueryHandle(), results.get(0).getQueryHandle());
   }
