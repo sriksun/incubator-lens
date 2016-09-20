@@ -1937,6 +1937,7 @@ public class TestQueryService extends LensJerseyTest {
   @Test
   public void testGetQueryDetails() throws IOException, InterruptedException, LensException {
 
+    UUID queryName = UUID.randomUUID();
     WebTarget target = target().path("queryapi/queries");
     final FormDataMultiPart mp = new FormDataMultiPart();
     mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("sessionid").build(), lensSessionId,
@@ -1945,7 +1946,7 @@ public class TestQueryService extends LensJerseyTest {
       + TEST_TABLE));
     mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("operation").build(), "execute_with_timeout"));
     mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("timeoutmillis").build(), "300000"));
-    mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("queryName").build(), "myquery"));
+    mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("queryName").build(), queryName.toString()));
     mp.bodyPart(new FormDataBodyPart(FormDataContentDisposition.name("conf").fileName("conf").build(), new LensConf(),
       MediaType.APPLICATION_XML_TYPE));
 
@@ -1956,10 +1957,12 @@ public class TestQueryService extends LensJerseyTest {
     assertNotNull(result.getResult());
 
     target = target().path("queryapi/queries/detail");
-    List<LensQuery> results = target.queryParam("queryName", "myquery")
+    List<LensQuery> results = target.queryParam("queryName", queryName)
       .queryParam("sessionid", lensSessionId)
       .request(MediaType.APPLICATION_XML_TYPE)
       .get(new GenericType<List<LensQuery>>(){});
     Assert.assertFalse(results.isEmpty());
+    Assert.assertEquals(queryName.toString(), results.get(0).getQueryName());
+    Assert.assertEquals(result.getQueryHandle(), results.get(0).getQueryHandle());
   }
 }
