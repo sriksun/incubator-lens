@@ -292,8 +292,14 @@ public class LensClient implements AutoCloseable {
     }
   }
 
+  /**
+   * See {@link LensClient#getStatement()}
+   * @param query queryHandle
+   * @return Statement
+   */
+  @Deprecated
   public LensStatement getLensStatement(QueryHandle query) {
-    return this.statementMap.get(query);
+    return statement;
   }
 
   public QueryStatus getQueryStatus(QueryHandle query) {
@@ -322,13 +328,13 @@ public class LensClient implements AutoCloseable {
 
 
   public QueryResult getResults(QueryHandle query) {
-    QueryStatus status = getLensStatement(query).getStatus();
+    QueryStatus status = statement.getStatus();
     if (!status.isResultSetAvailable()) {
       log.debug("Current status of the query is {}", status);
       throw new IllegalStateException("Resultset for the query "
         + query + " is not available, its current status is " + status);
     }
-    return getLensStatement(query).getResultSet();
+    return statement.getResultSet();
   }
 
   public List<QueryHandle> getQueries(String state, String queryName, String user, String driver, String fromDate,

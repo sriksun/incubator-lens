@@ -319,7 +319,7 @@ public class TestLensQueryCommands extends LensCliApplicationTest {
     String sql = "cube select id,name from test_dim";
     long submitTime = System.currentTimeMillis();
     String qh = qCom.executeQuery(sql, true, "testQuery1");
-    String user = qCom.getClient().getLensStatement(new QueryHandle(UUID.fromString(qh)))
+    String user = qCom.getClient().getStatement()
         .getQuery().getSubmittedUser();
     String result = qCom.getAllQueries("", "testQuery1", user, "", null, null);
     // this is because previous query has run two query handle will be there
@@ -365,7 +365,7 @@ public class TestLensQueryCommands extends LensCliApplicationTest {
       }
     }
 
-    String queryName = qCom.getClient().getLensStatement(new QueryHandle(UUID.fromString(qh))).getQuery()
+    String queryName = qCom.getClient().getStatement().getQuery()
             .getQueryName();
     assertTrue("testQuery1".equalsIgnoreCase(queryName), queryName);
     result = qCom.getAllQueries("", "", "", "", String.valueOf(submitTime), "now");
