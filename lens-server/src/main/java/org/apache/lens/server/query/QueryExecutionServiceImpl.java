@@ -2317,11 +2317,19 @@ public class QueryExecutionServiceImpl extends BaseLensService implements QueryE
         long waitMillisPerCheck = totalWaitTime/10;
         waitMillisPerCheck = (waitMillisPerCheck > 500) ? 500 : waitMillisPerCheck; // Lets keep max as 0.5 sec
         synchronized (listener) {
+<<<<<<< HEAD
           while (System.currentTimeMillis() < timeOutTime
+=======
+          while (totalWaitMillisSoFar < totalWaitTime
+>>>>>>> upstream/current-release-line
             && !listener.querySuccessful
             && !queryCtx.getStatus().executed()
             && !queryCtx.getStatus().finished()) {
             listener.wait(waitMillisPerCheck);
+<<<<<<< HEAD
+=======
+            totalWaitMillisSoFar += waitMillisPerCheck;
+>>>>>>> upstream/current-release-line
             if (!listener.querySuccessful) {
               //update ths status in case query is not successful yet
               queryCtx = getUpdatedQueryContext(sessionHandle, handle);

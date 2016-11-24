@@ -20,6 +20,10 @@ package org.apache.lens.server.scheduler;
 
 import static org.apache.lens.server.scheduler.util.SchedulerTestUtils.*;
 
+<<<<<<< HEAD
+=======
+import java.util.GregorianCalendar;
+>>>>>>> upstream/current-release-line
 import java.util.List;
 
 import org.apache.lens.api.LensSessionHandle;
@@ -30,6 +34,11 @@ import org.apache.lens.server.LensServerConf;
 import org.apache.lens.server.LensServices;
 import org.apache.lens.server.api.LensConfConstants;
 import org.apache.lens.server.api.scheduler.SchedulerService;
+<<<<<<< HEAD
+=======
+
+import org.apache.hadoop.conf.Configuration;
+>>>>>>> upstream/current-release-line
 
 import org.testng.Assert;
 import org.testng.annotations.BeforeMethod;
@@ -44,14 +53,48 @@ public class TestSchedulerServiceImpl {
   SchedulerServiceImpl scheduler;
   EventServiceImpl eventService;
   String user = "someuser";
+<<<<<<< HEAD
   String queryString = "select ID from test_table";
 
+=======
+>>>>>>> upstream/current-release-line
   @BeforeMethod
   public void setup() throws Exception {
     System.setProperty(LensConfConstants.CONFIG_LOCATION, "target/test-classes/");
   }
 
+<<<<<<< HEAD
 
+=======
+  private void setupQueryService() throws Exception {
+    QueryExecutionService queryExecutionService = PowerMockito.mock(QueryExecutionService.class);
+    scheduler.setQueryService(queryExecutionService);
+    PowerMockito.when(
+      scheduler.getQueryService().estimate(anyString(), any(LensSessionHandle.class), anyString(), any(LensConf.class)))
+      .thenReturn(null);
+    PowerMockito.when(scheduler.getQueryService()
+      .executeAsync(any(LensSessionHandle.class), anyString(), any(LensConf.class), anyString()))
+      .thenReturn(new QueryHandle(UUID.randomUUID()));
+    PowerMockito.when(scheduler.getQueryService().cancelQuery(any(LensSessionHandle.class), any(QueryHandle.class)))
+      .thenReturn(true);
+    scheduler.getSchedulerEventListener().setQueryService(queryExecutionService);
+  }
+
+  private QueryEnded mockQueryEnded(SchedulerJobInstanceHandle instanceHandle, QueryStatus.Status status) {
+    QueryContext mockContext = PowerMockito.mock(QueryContext.class);
+    PowerMockito.when(mockContext.getResultSetPath()).thenReturn("/tmp/query1/result");
+    Configuration conf = new Configuration();
+    // set the instance handle
+    conf.set("job_instance_key", instanceHandle.getHandleIdString());
+    PowerMockito.when(mockContext.getConf()).thenReturn(conf);
+    // Get the queryHandle.
+    PowerMockito.when(mockContext.getQueryHandle()).thenReturn(new QueryHandle(UUID.randomUUID()));
+    QueryEnded queryEnded = PowerMockito.mock(QueryEnded.class);
+    PowerMockito.when(queryEnded.getQueryContext()).thenReturn(mockContext);
+    PowerMockito.when(queryEnded.getCurrentValue()).thenReturn(status);
+    return queryEnded;
+  }
+>>>>>>> upstream/current-release-line
 
   @Test(priority = 1)
   public void testScheduler() throws Exception {
@@ -59,7 +102,11 @@ public class TestSchedulerServiceImpl {
     LensServices.get().start();
     scheduler = LensServices.get().getService(SchedulerService.NAME);
     eventService = LensServices.get().getService(EventServiceImpl.NAME);
+<<<<<<< HEAD
     setupQueryService(scheduler);
+=======
+    setupQueryService();
+>>>>>>> upstream/current-release-line
     LensSessionHandle sessionHandle = scheduler.openSessionAsUser(user);
     long currentTime = System.currentTimeMillis();
     XJob job = getTestJob("0/5 * * * * ?", queryString, currentTime, currentTime + 15000);
@@ -87,7 +134,11 @@ public class TestSchedulerServiceImpl {
   @Test(priority = 2)
   public void testSuspendResume() throws Exception {
     long currentTime = System.currentTimeMillis();
+<<<<<<< HEAD
     XJob job = getTestJob("0/10 * * * * ?", queryString, currentTime, currentTime + 180000);
+=======
+    XJob job = getTestJob("0/10 * * * * ?", currentTime, currentTime + 180000);
+>>>>>>> upstream/current-release-line
     LensSessionHandle sessionHandle = scheduler.openSessionAsUser(user);
     SchedulerJobHandle jobHandle = scheduler.submitAndScheduleJob(sessionHandle, job);
     Assert.assertNotNull(jobHandle);
@@ -105,7 +156,11 @@ public class TestSchedulerServiceImpl {
   public void testRerunInstance() throws Exception {
     long currentTime = System.currentTimeMillis();
 
+<<<<<<< HEAD
     XJob job = getTestJob("0/10 * * * * ?", queryString, currentTime, currentTime + 180000);
+=======
+    XJob job = getTestJob("0/10 * * * * ?", currentTime, currentTime + 180000);
+>>>>>>> upstream/current-release-line
     LensSessionHandle sessionHandle = scheduler.openSessionAsUser(user);
     SchedulerJobHandle jobHandle = scheduler.submitAndScheduleJob(sessionHandle, job);
     // Wait for some instances.
@@ -138,7 +193,11 @@ public class TestSchedulerServiceImpl {
   @Test(priority = 2)
   public void testKillRunningInstance() throws Exception {
     long currentTime = System.currentTimeMillis();
+<<<<<<< HEAD
     XJob job = getTestJob("0/5 * * * * ?", queryString, currentTime, currentTime + 180000);
+=======
+    XJob job = getTestJob("0/5 * * * * ?", currentTime, currentTime + 180000);
+>>>>>>> upstream/current-release-line
     LensSessionHandle sessionHandle = scheduler.openSessionAsUser(user);
     SchedulerJobHandle jobHandle = scheduler.submitAndScheduleJob(sessionHandle, job);
     // Let it run
@@ -158,5 +217,46 @@ public class TestSchedulerServiceImpl {
     scheduler.expireJob(sessionHandle, jobHandle);
     Assert.assertEquals(scheduler.getSchedulerDAO().getJobState(jobHandle), SchedulerJobState.EXPIRED);
     scheduler.closeSession(sessionHandle);
+<<<<<<< HEAD
+=======
+  }
+
+  private XTrigger getTestTrigger(String cron) {
+    XTrigger trigger = new XTrigger();
+    XFrequency frequency = new XFrequency();
+    frequency.setCronExpression(cron);
+    frequency.setTimezone("UTC");
+    trigger.setFrequency(frequency);
+    return trigger;
+  }
+
+  private XExecution getTestExecution() {
+    XExecution execution = new XExecution();
+    XJobQuery query = new XJobQuery();
+    query.setQuery("select ID from test_table");
+    execution.setQuery(query);
+    XSessionType sessionType = new XSessionType();
+    sessionType.setDb("default");
+    execution.setSession(sessionType);
+    return execution;
+  }
+
+  private XJob getTestJob(String cron, long start, long end) throws Exception {
+    XJob job = new XJob();
+    job.setTrigger(getTestTrigger(cron));
+    job.setName("Test lens Job");
+    GregorianCalendar startTime = new GregorianCalendar();
+    startTime.setTimeInMillis(start);
+    XMLGregorianCalendar startCal = DatatypeFactory.newInstance().newXMLGregorianCalendar(startTime);
+
+    GregorianCalendar endTime = new GregorianCalendar();
+    endTime.setTimeInMillis(end);
+    XMLGregorianCalendar endCal = DatatypeFactory.newInstance().newXMLGregorianCalendar(endTime);
+
+    job.setStartTime(startCal);
+    job.setEndTime(endCal);
+    job.setExecution(getTestExecution());
+    return job;
+>>>>>>> upstream/current-release-line
   }
 }

@@ -391,10 +391,17 @@ public class SchedulerDAO {
     public int insertIntoJobInstanceRunTable(SchedulerJobInstanceRun instanceRun) throws SQLException {
       String insetSQL = "INSERT INTO " + JOB_INSTANCE_RUN_TABLE + " VALUES(?,?,?,?,?,?,?,?)";
       return runner.update(insetSQL, instanceRun.getHandle().getHandleIdString(), instanceRun.getRunId(),
+<<<<<<< HEAD
         instanceRun.getSessionHandle() == null ? "" : instanceRun.getSessionHandle().toString(),
         instanceRun.getStartTime(), instanceRun.getEndTime(), instanceRun.getResultPath(),
         instanceRun.getQueryHandle() == null ? "" : instanceRun.getQueryHandle().getHandleIdString(),
         instanceRun.getInstanceState().name());
+=======
+          instanceRun.getSessionHandle() == null ? "" : instanceRun.getSessionHandle().toString(),
+          instanceRun.getStartTime(), instanceRun.getEndTime(), instanceRun.getResultPath(),
+          instanceRun.getQueryHandle() == null ? "" : instanceRun.getQueryHandle().getHandleIdString(),
+          instanceRun.getInstanceState().name());
+>>>>>>> upstream/current-release-line
     }
 
     /**
@@ -693,11 +700,20 @@ public class SchedulerDAO {
     @Override
     public void createJobInstanceRunTable() throws SQLException {
       String createSQL =
+<<<<<<< HEAD
         "CREATE TABLE IF NOT EXISTS " + JOB_INSTANCE_RUN_TABLE + "( " + COLUMN_ID + " VARCHAR(255) NOT NULL, "
           + COLUMN_RUN_ID + " INT NOT NULL, " + COLUMN_SESSION_HANDLE + " VARCHAR(255), " + COLUMN_START_TIME
           + " BIGINT, " + COLUMN_END_TIME + " BIGINT, " + COLUMN_RESULT_PATH + " TEXT, " + COLUMN_QUERY_HANDLE
           + " VARCHAR(255), " + COLUMN_STATUS + " VARCHAR(20), " + " PRIMARY KEY ( " + COLUMN_ID + ", " + COLUMN_RUN_ID
           + ")" + ")";
+=======
+          "CREATE TABLE IF NOT EXISTS " + JOB_INSTANCE_RUN_TABLE + "( " + COLUMN_ID + " VARCHAR(255) NOT NULL, "
+              + COLUMN_RUN_ID + " INT NOT NULL, " + COLUMN_SESSION_HANDLE + " VARCHAR(255), " + COLUMN_START_TIME
+              + " BIGINT, " + COLUMN_END_TIME + " BIGINT, " + COLUMN_RESULT_PATH + " TEXT, " + COLUMN_QUERY_HANDLE
+              + " VARCHAR(255), " + COLUMN_STATUS + " VARCHAR(20), " + " PRIMARY KEY ( " + COLUMN_ID + ", "
+              + COLUMN_RUN_ID
+              + ")" + ")";
+>>>>>>> upstream/current-release-line
       runner.update(createSQL);
     }
   }
@@ -737,11 +753,19 @@ public class SchedulerDAO {
     @Override
     public void createJobInstanceRunTable() throws SQLException {
       String createSQL =
+<<<<<<< HEAD
         "CREATE TABLE IF NOT EXISTS " + JOB_INSTANCE_RUN_TABLE + "( " + COLUMN_ID + " VARCHAR(255) NOT NULL, "
           + COLUMN_RUN_ID + " INT NOT NULL, " + COLUMN_SESSION_HANDLE + " VARCHAR(255), " + COLUMN_START_TIME
           + " BIGINT, " + COLUMN_END_TIME + " BIGINT, " + COLUMN_RESULT_PATH + " VARCHAR(1024)," + COLUMN_QUERY_HANDLE
           + " VARCHAR(255), " + COLUMN_STATUS + " VARCHAR(20), " + " PRIMARY KEY ( " + COLUMN_ID + ", " + COLUMN_RUN_ID
           + " )" + ")";
+=======
+          "CREATE TABLE IF NOT EXISTS " + JOB_INSTANCE_RUN_TABLE + "( " + COLUMN_ID + " VARCHAR(255) NOT NULL, "
+              + COLUMN_RUN_ID + " INT NOT NULL, " + COLUMN_SESSION_HANDLE + " VARCHAR(255), " + COLUMN_START_TIME
+              + " BIGINT, " + COLUMN_END_TIME + " BIGINT, " + COLUMN_RESULT_PATH + " VARCHAR(1024),"
+              + COLUMN_QUERY_HANDLE + " VARCHAR(255), " + COLUMN_STATUS + " VARCHAR(20), " + " PRIMARY KEY ( "
+              + COLUMN_ID + ", " + COLUMN_RUN_ID + " )" + ")";
+>>>>>>> upstream/current-release-line
       runner.update(createSQL);
     }
   }

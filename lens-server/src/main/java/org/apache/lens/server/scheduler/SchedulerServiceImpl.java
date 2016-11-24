@@ -107,6 +107,7 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
   private void doesSessionBelongToUser(LensSessionHandle sessionHandle, String user) throws LensException {
     LensSessionImpl session = getSession(sessionHandle);
     if (!session.getLoggedInUser().equals(user)) {
+<<<<<<< HEAD
       log.warn("Session User {} is not equal to Job owner {}", session.getLoggedInUser(), user);
       throw new LensException(LensSchedulerErrorCode.CURRENT_USER_IS_NOT_SAME_AS_OWNER.getLensErrorInfo(), null,
         session.getLoggedInUser(), sessionHandle.getPublicId().toString(), user);
@@ -120,6 +121,12 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
    * instance. If query is still running then do nothing.
    * If the state is New then Kill the instance and rerun it.
    */
+=======
+      throw new LensException("Logged in user " + session.getLoggedInUser() + " is not same as " + user);
+    }
+  }
+
+>>>>>>> upstream/current-release-line
   @Override
   public synchronized void start() {
     super.start();
@@ -234,12 +241,15 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
     return openSession(user, "Mimbulus Mimbletonia", new HashMap<String, String>(), false);
   }
 
+<<<<<<< HEAD
   @Override
   public List<SchedulerJobHandle> getAllJobs(String user, SchedulerJobState state, Long start, Long end)
     throws LensException {
     return this.schedulerDAO.getJobs(user, state, start, end);
   }
 
+=======
+>>>>>>> upstream/current-release-line
   /**
    * {@inheritDoc}
    */
@@ -251,7 +261,11 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
     SchedulerJobHandle handle = UtilityMethods.generateSchedulerJobHandle();
     long createdOn = System.currentTimeMillis();
     SchedulerJobInfo info = new SchedulerJobInfo(handle, job, session.getLoggedInUser(), SchedulerJobState.NEW,
+<<<<<<< HEAD
       createdOn, createdOn);
+=======
+      createdOn, modifiedOn);
+>>>>>>> upstream/current-release-line
     if (schedulerDAO.storeJob(info) == 1) {
       log.info("Successfully submitted job with handle {}", handle);
       return handle;
@@ -267,8 +281,13 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
    * {@inheritDoc}
    */
   @Override
+<<<<<<< HEAD
   public void scheduleJob(LensSessionHandle sessionHandle, SchedulerJobHandle jobHandle) throws LensException {
     SchedulerJobInfo jobInfo = checkAndGetSchedulerJobInfo(jobHandle);
+=======
+  public boolean scheduleJob(LensSessionHandle sessionHandle, SchedulerJobHandle jobHandle) throws LensException {
+    SchedulerJobInfo jobInfo = schedulerDAO.getSchedulerJobInfo(jobHandle);
+>>>>>>> upstream/current-release-line
     doesSessionBelongToUser(sessionHandle, jobInfo.getUserName());
     XJob job = jobInfo.getJob();
     DateTime start = new DateTime(job.getStartTime().toGregorianCalendar().getTime());
@@ -278,7 +297,11 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
     checkQuery(sessionHandle, job);
     alarmService.schedule(start, end, frequency, jobHandle.getHandleIdString());
     log.info("Successfully scheduled job with handle {} in AlarmService", jobHandle);
+<<<<<<< HEAD
     setStateOfJob(jobInfo, SchedulerJobEvent.ON_SCHEDULE);
+=======
+    return setStateOfJob(jobInfo, SchedulerJobEvent.ON_SCHEDULE) == 1;
+>>>>>>> upstream/current-release-line
   }
 
   private void checkQuery(LensSessionHandle sessionHandle, XJob job) throws LensException {
@@ -290,6 +313,10 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
     queryConf.addProperty(CubeQueryConfUtil.FAIL_QUERY_ON_PARTIAL_DATA, false);
     queryService.estimate(LensServices.get().getLogSegregationContext().getLogSegragationId(), sessionHandle,
       job.getExecution().getQuery().getQuery(), queryConf);
+<<<<<<< HEAD
+=======
+    return;
+>>>>>>> upstream/current-release-line
   }
 
   @Override
@@ -312,6 +339,7 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
    */
   @Override
   public SchedulerJobInfo getJobDetails(SchedulerJobHandle jobHandle) throws LensException {
+<<<<<<< HEAD
     return checkAndGetSchedulerJobInfo(jobHandle);
   }
 
@@ -323,6 +351,9 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
         jobHandle.getHandleIdString());
     }
     return jobInfo;
+=======
+    return schedulerDAO.getSchedulerJobInfo(jobHandle);
+>>>>>>> upstream/current-release-line
   }
 
   /**
@@ -331,7 +362,11 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
   @Override
   public void updateJob(LensSessionHandle sessionHandle, SchedulerJobHandle jobHandle, XJob newJobDefinition)
     throws LensException {
+<<<<<<< HEAD
     SchedulerJobInfo jobInfo = checkAndGetSchedulerJobInfo(jobHandle);
+=======
+    SchedulerJobInfo jobInfo = schedulerDAO.getSchedulerJobInfo(jobHandle);
+>>>>>>> upstream/current-release-line
     doesSessionBelongToUser(sessionHandle, jobInfo.getUserName());
     // This will allow only the job definition and configuration change.
     jobInfo.setJob(newJobDefinition);
@@ -348,50 +383,84 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
    * {@inheritDoc}
    */
   @Override
+<<<<<<< HEAD
   public void expireJob(LensSessionHandle sessionHandle, SchedulerJobHandle jobHandle) throws LensException {
     SchedulerJobInfo info = checkAndGetSchedulerJobInfo(jobHandle);
+=======
+  public boolean expireJob(LensSessionHandle sessionHandle, SchedulerJobHandle jobHandle) throws LensException {
+    SchedulerJobInfo info = schedulerDAO.getSchedulerJobInfo(jobHandle);
+>>>>>>> upstream/current-release-line
     doesSessionBelongToUser(sessionHandle, info.getUserName());
     if (alarmService.checkExists(jobHandle)) {
       alarmService.unSchedule(jobHandle);
       log.info("Successfully unscheduled the job with handle {} in AlarmService ", jobHandle);
     }
+<<<<<<< HEAD
     setStateOfJob(info, SchedulerJobEvent.ON_EXPIRE);
+=======
+    return setStateOfJob(info, SchedulerJobEvent.ON_EXPIRE) == 1;
+>>>>>>> upstream/current-release-line
   }
 
   /**
    * {@inheritDoc}
    */
   @Override
+<<<<<<< HEAD
   public void suspendJob(LensSessionHandle sessionHandle, SchedulerJobHandle jobHandle) throws LensException {
     SchedulerJobInfo info = checkAndGetSchedulerJobInfo(jobHandle);
     doesSessionBelongToUser(sessionHandle, info.getUserName());
     alarmService.pauseJob(jobHandle);
     setStateOfJob(info, SchedulerJobEvent.ON_SUSPEND);
+=======
+  public boolean suspendJob(LensSessionHandle sessionHandle, SchedulerJobHandle jobHandle) throws LensException {
+    SchedulerJobInfo info = schedulerDAO.getSchedulerJobInfo(jobHandle);
+    doesSessionBelongToUser(sessionHandle, info.getUserName());
+    alarmService.pauseJob(jobHandle);
+    return setStateOfJob(info, SchedulerJobEvent.ON_SUSPEND) == 1;
+>>>>>>> upstream/current-release-line
   }
 
   /**
    * {@inheritDoc}
    */
   @Override
+<<<<<<< HEAD
   public void resumeJob(LensSessionHandle sessionHandle, SchedulerJobHandle jobHandle) throws LensException {
     SchedulerJobInfo info = checkAndGetSchedulerJobInfo(jobHandle);
     doesSessionBelongToUser(sessionHandle, info.getUserName());
     alarmService.resumeJob(jobHandle);
     setStateOfJob(info, SchedulerJobEvent.ON_RESUME);
+=======
+  public boolean resumeJob(LensSessionHandle sessionHandle, SchedulerJobHandle jobHandle) throws LensException {
+    SchedulerJobInfo info = schedulerDAO.getSchedulerJobInfo(jobHandle);
+    doesSessionBelongToUser(sessionHandle, info.getUserName());
+    alarmService.resumeJob(jobHandle);
+    return setStateOfJob(info, SchedulerJobEvent.ON_RESUME) == 1;
+>>>>>>> upstream/current-release-line
   }
 
   /**
    * {@inheritDoc}
    */
   @Override
+<<<<<<< HEAD
   public void deleteJob(LensSessionHandle sessionHandle, SchedulerJobHandle jobHandle) throws LensException {
     SchedulerJobInfo info = checkAndGetSchedulerJobInfo(jobHandle);
+=======
+  public boolean deleteJob(LensSessionHandle sessionHandle, SchedulerJobHandle jobHandle) throws LensException {
+    SchedulerJobInfo info = schedulerDAO.getSchedulerJobInfo(jobHandle);
+>>>>>>> upstream/current-release-line
     doesSessionBelongToUser(sessionHandle, info.getUserName());
     if (alarmService.checkExists(jobHandle)) {
       alarmService.unSchedule(jobHandle);
       log.info("Successfully unscheduled the job with handle {} ", jobHandle);
     }
+<<<<<<< HEAD
     setStateOfJob(info, SchedulerJobEvent.ON_DELETE);
+=======
+    return setStateOfJob(info, SchedulerJobEvent.ON_DELETE) == 1;
+>>>>>>> upstream/current-release-line
   }
 
   /**
@@ -420,10 +489,15 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
     throws LensException {
     SchedulerJobInstanceInfo instanceInfo = schedulerDAO.getSchedulerJobInstanceInfo(instanceHandle);
     doesSessionBelongToUser(sessionHandle, schedulerDAO.getUser(instanceInfo.getJobId()));
+<<<<<<< HEAD
     SchedulerJobState currentState = schedulerDAO.getJobState(instanceInfo.getJobId());
     if (currentState != SchedulerJobState.SCHEDULED) {
       throw new LensException(LensSchedulerErrorCode.JOB_IS_NOT_SCHEDULED.getLensErrorInfo(), null,
         instanceInfo.getJobId().getHandleIdString(), currentState);
+=======
+    if (schedulerDAO.getJobState(instanceInfo.getJobId()) != SchedulerJobState.SCHEDULED) {
+      throw new LensException("Job with handle " + instanceInfo.getJobId() + " is not scheduled");
+>>>>>>> upstream/current-release-line
     }
     // Get the latest run.
     List<SchedulerJobInstanceRun> runList = instanceInfo.getInstanceRunList();
@@ -433,8 +507,15 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
     }
     SchedulerJobInstanceRun latestRun = runList.get(runList.size() - 1);
     try {
+<<<<<<< HEAD
       latestRun.getInstanceState().nextTransition(ON_RERUN);
       notifyRerun(instanceInfo);
+=======
+      latestRun.getInstanceState().nextTransition(SchedulerJobInstanceEvent.ON_RERUN);
+      getEventService().notifyEvent(
+        new SchedulerAlarmEvent(instanceInfo.getJobId(), new DateTime(instanceInfo.getScheduleTime()),
+          SchedulerAlarmEvent.EventType.SCHEDULE, instanceHandle));
+>>>>>>> upstream/current-release-line
       log.info("Rerunning the instance with {} for job {} ", instanceHandle, instanceInfo.getJobId());
     } catch (InvalidStateTransitionException e) {
       throw new LensException(LensSchedulerErrorCode.INVALID_EVENT_FOR_JOB_INSTANCE.getLensErrorInfo(), e,
@@ -476,6 +557,7 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
     }
     QueryHandle handle = latestRun.getQueryHandle();
     if (handle == null || handle.getHandleIdString().isEmpty()) {
+<<<<<<< HEAD
       log.info("Killing instance {} for job {} ", instanceInfo.getId(), instanceInfo.getJobId());
       return updateInstanceRun(latestRun, state);
     } else {
@@ -492,6 +574,24 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
     latestRun.setEndTime(System.currentTimeMillis());
     latestRun.setInstanceState(state);
     return schedulerDAO.updateJobInstanceRun(latestRun) == 1;
+=======
+      SchedulerJobInstanceState state = latestRun.getInstanceState();
+      try {
+        state = state.nextTransition(SchedulerJobInstanceEvent.ON_KILL);
+      } catch (InvalidStateTransitionException e) {
+        throw new LensException("Invalid Transition of state ", e);
+      }
+      latestRun.setEndTime(System.currentTimeMillis());
+      latestRun.setInstanceState(state);
+      schedulerDAO.updateJobInstanceRun(latestRun);
+      log.info("Killing instance with {} for job {} ", instanceHandle, instanceInfo.getJobId());
+      return true;
+    }
+    log.info("Killing instance with {} for job {} with query handle {} ", instanceHandle, instanceInfo.getJobId(),
+      handle);
+    // This will cause the QueryEnd event which will set the status of the instance to KILLED.
+    return queryService.cancelQuery(sessionHandle, handle);
+>>>>>>> upstream/current-release-line
   }
 
   /**
@@ -502,9 +602,15 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
     return schedulerDAO.getSchedulerJobInstanceInfo(instanceHandle);
   }
 
+<<<<<<< HEAD
   private void setStateOfJob(SchedulerJobInfo info, SchedulerJobEvent event) throws LensException {
     SchedulerJobState currentState = info.getJobState();
     try {
+=======
+  private int setStateOfJob(SchedulerJobInfo info, SchedulerJobEvent event) throws LensException {
+    try {
+      SchedulerJobState currentState = info.getJobState();
+>>>>>>> upstream/current-release-line
       SchedulerJobState nextState = currentState.nextTransition(event);
       info.setJobState(nextState);
       info.setModifiedOn(System.currentTimeMillis());
@@ -512,10 +618,15 @@ public class SchedulerServiceImpl extends BaseLensService implements SchedulerSe
       if (ret == 1) {
         log.info("Successfully changed the status of job with handle {} from {} to {}", info.getId(), currentState,
           nextState);
+<<<<<<< HEAD
       } else {
         throw new LensException(LensSchedulerErrorCode.CANT_UPDATE_RESOURCE_WITH_HANDLE.getLensErrorInfo(), null, "job",
           info.getId().getHandleIdString());
       }
+=======
+      }
+      return ret;
+>>>>>>> upstream/current-release-line
     } catch (InvalidStateTransitionException e) {
       throw new LensException(LensSchedulerErrorCode.INVALID_EVENT_FOR_JOB.getLensErrorInfo(), e, event.name(),
         currentState.name(), info.getId().getHandleIdString());

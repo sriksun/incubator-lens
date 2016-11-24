@@ -213,8 +213,12 @@ public class AlarmService extends AbstractService implements LensService {
       return scheduler.deleteJob(JobKey.jobKey(jobHandle.getHandleIdString(), LENS_JOBS));
     } catch (SchedulerException e) {
       log.error("Failed to remove alarm triggers for job with jobHandle: {}", jobHandle);
+<<<<<<< HEAD
       throw new LensException(LensSchedulerErrorCode.FAILED_ALARM_SERVICE_OPERATION.getLensErrorInfo(), e, "unschedule",
         jobHandle.getHandleIdString());
+=======
+      throw new LensException("Failed to remove alarm triggers for job with jobHandle: " + jobHandle, e);
+>>>>>>> upstream/current-release-line
     }
   }
 
@@ -232,8 +236,12 @@ public class AlarmService extends AbstractService implements LensService {
       scheduler.pauseJob(JobKey.jobKey(jobHandle.getHandleIdString(), LENS_JOBS));
     } catch (SchedulerException e) {
       log.error("Failed to pause alarm triggers for job with jobHandle: {}", jobHandle);
+<<<<<<< HEAD
       throw new LensException(LensSchedulerErrorCode.FAILED_ALARM_SERVICE_OPERATION.getLensErrorInfo(), e, "pause",
         jobHandle.getHandleIdString());
+=======
+      throw new LensException("Failed to pause alarm triggers for job with jobHandle: " + jobHandle, e);
+>>>>>>> upstream/current-release-line
     }
   }
 
@@ -242,8 +250,12 @@ public class AlarmService extends AbstractService implements LensService {
       scheduler.resumeJob(JobKey.jobKey(jobHandle.getHandleIdString(), LENS_JOBS));
     } catch (SchedulerException e) {
       log.error("Failed to resume alarm triggers for job with jobHandle: {}", jobHandle);
+<<<<<<< HEAD
       throw new LensException(LensSchedulerErrorCode.FAILED_ALARM_SERVICE_OPERATION.getLensErrorInfo(), e, "resume",
         jobHandle.getHandleIdString());
+=======
+      throw new LensException("Failed to resume alarm triggers for job with jobHandle: " + jobHandle, e);
+>>>>>>> upstream/current-release-line
     }
   }
 
@@ -270,9 +282,14 @@ public class AlarmService extends AbstractService implements LensService {
       try {
         notifyEventService(alarmEvent, shouldWait);
         if (jobExecutionContext.getNextFireTime() == null) {
+<<<<<<< HEAD
           SchedulerAlarmEvent expireEvent = (new SchedulerAlarmEvent(jobHandle, nominalTime,
             SchedulerAlarmEvent.EventType.EXPIRE, null));
           notifyEventService(expireEvent, shouldWait);
+=======
+          eventService
+            .notifyEvent(new SchedulerAlarmEvent(jobHandle, nominalTime, SchedulerAlarmEvent.EventType.EXPIRE, null));
+>>>>>>> upstream/current-release-line
         }
       } catch (LensException e) {
         log.error("Failed to notify SchedulerAlarmEvent for jobHandle: {} and scheduleTime: {}",

@@ -214,6 +214,7 @@ public interface SchedulerService extends LensService, SessionValidator {
    * @return LensSessionHandle
    */
   LensSessionHandle openSessionAsUser(String user) throws LensException;
+<<<<<<< HEAD
 
   /**
    * Get all jobs matching the filter parameters.
@@ -224,4 +225,6 @@ public interface SchedulerService extends LensService, SessionValidator {
    * @return List of all job handles matching the parameters.
    */
   List<SchedulerJobHandle> getAllJobs(String user, SchedulerJobState state, Long start, Long end) throws LensException;
+=======
+>>>>>>> upstream/current-release-line
 }

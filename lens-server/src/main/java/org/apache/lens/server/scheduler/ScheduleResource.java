@@ -23,6 +23,7 @@ import java.util.List;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
+import javax.xml.bind.JAXBElement;
 
 import org.apache.lens.api.LensSessionHandle;
 import org.apache.lens.api.result.LensAPIResult;
@@ -40,6 +41,7 @@ import org.apache.lens.server.util.UtilityMethods;
 @Path("scheduler")
 @Produces({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
 public class ScheduleResource {
+  private static final ObjectFactory OBJECT_FACTORY = new ObjectFactory();
 
   private final LogSegregationContext logSegregationContext;
   private final SchedulerService schedulerService;
@@ -128,11 +130,21 @@ public class ScheduleResource {
   @GET
   @Path("jobs/stats")
   public Collection<SchedulerJobStats> getAllJobStats(@QueryParam("sessionid") LensSessionHandle sessionId,
+<<<<<<< HEAD
     @DefaultValue("running") @QueryParam("status") String status, @QueryParam("name") String jobName,
     @DefaultValue("user") @QueryParam("user") String user, @DefaultValue("-1") @QueryParam("start") long start,
     @DefaultValue("-1") @QueryParam("end") long end) throws LensException {
     validateSession(sessionId);
     return schedulerService.getAllJobStats(status, user, jobName, start, end);
+=======
+                                                @DefaultValue("running") @QueryParam("status") String status,
+                                                @QueryParam("name") String jobName,
+                                                @DefaultValue("user") @QueryParam("user") String user,
+                                                @DefaultValue("-1") @QueryParam("start") long start,
+                                                @DefaultValue("-1") @QueryParam("end") long end) throws LensException {
+    validateSession(sessionId);
+    return getSchedulerService().getAllJobStats(status, user, jobName, start, end);
+>>>>>>> upstream/current-release-line
   }
 
   /**
@@ -145,11 +157,18 @@ public class ScheduleResource {
    */
   @GET
   @Path("jobs/{jobHandle}")
+<<<<<<< HEAD
   public LensAPIResult<XJob> getJobDefinition(@QueryParam("sessionid") LensSessionHandle sessionId,
     @PathParam("jobHandle") SchedulerJobHandle jobHandle) throws LensException {
     validateSession(sessionId);
     XJob job = schedulerService.getJobDefinition(jobHandle);
     return LensAPIResult.composedOf(null, this.logSegregationContext.getLogSegragationId(), job);
+=======
+  public JAXBElement<XJob> getJobDefinition(@QueryParam("sessionid") LensSessionHandle sessionId,
+                               @PathParam("jobHandle") SchedulerJobHandle jobHandle) throws LensException {
+
+    return OBJECT_FACTORY.createJob(getSchedulerService().getJobDefinition(jobHandle));
+>>>>>>> upstream/current-release-line
   }
 
   /**
@@ -163,8 +182,13 @@ public class ScheduleResource {
    */
   @DELETE
   @Path("jobs/{jobHandle}")
+<<<<<<< HEAD
   public LensAPIResult deleteJob(@QueryParam("sessionid") LensSessionHandle sessionId,
     @PathParam("jobHandle") SchedulerJobHandle jobHandle) throws LensException {
+=======
+  public APIResult deleteJob(@QueryParam("sessionid") LensSessionHandle sessionId,
+                             @PathParam("jobHandle") SchedulerJobHandle jobHandle) throws LensException {
+>>>>>>> upstream/current-release-line
     validateSession(sessionId);
     schedulerService.deleteJob(sessionId, jobHandle);
     final String requestId = this.logSegregationContext.getLogSegragationId();
@@ -240,11 +264,18 @@ public class ScheduleResource {
    */
   @GET
   @Path("jobs/{jobHandle}/info")
+<<<<<<< HEAD
   public LensAPIResult<SchedulerJobInfo> getJobDetails(@QueryParam("sessionid") LensSessionHandle sessionId,
     @PathParam("jobHandle") SchedulerJobHandle jobHandle) throws LensException {
     validateSession(sessionId);
     SchedulerJobInfo info = schedulerService.getJobDetails(jobHandle);
     return LensAPIResult.composedOf(null, this.logSegregationContext.getLogSegragationId(), info);
+=======
+  public SchedulerJobInfo getJobDetails(@QueryParam("sessionid") LensSessionHandle sessionId,
+                                        @PathParam("jobHandle") SchedulerJobHandle jobHandle) throws LensException {
+    validateSession(sessionId);
+    return getSchedulerService().getJobDetails(jobHandle);
+>>>>>>> upstream/current-release-line
   }
 
   /**
@@ -262,7 +293,11 @@ public class ScheduleResource {
     @PathParam("jobHandle") SchedulerJobHandle jobHandle, @QueryParam("numResults") Long numResults)
     throws LensException {
     validateSession(sessionId);
+<<<<<<< HEAD
     return schedulerService.getJobInstances(jobHandle, numResults);
+=======
+    return getSchedulerService().getJobInstances(jobHandle, numResults);
+>>>>>>> upstream/current-release-line
   }
 
   /**
@@ -279,8 +314,12 @@ public class ScheduleResource {
     @QueryParam("sessionid") LensSessionHandle sessionId,
     @PathParam("instanceHandle") SchedulerJobInstanceHandle instanceHandle) throws LensException {
     validateSession(sessionId);
+<<<<<<< HEAD
     SchedulerJobInstanceInfo instance = schedulerService.getInstanceDetails(instanceHandle);
     return LensAPIResult.composedOf(null, this.logSegregationContext.getLogSegragationId(), instance);
+=======
+    return getSchedulerService().getInstanceDetails(instanceHandle);
+>>>>>>> upstream/current-release-line
   }
 
   /**
@@ -294,6 +333,7 @@ public class ScheduleResource {
    */
   @POST
   @Path("instances/{instanceHandle}")
+<<<<<<< HEAD
   public LensAPIResult updateInstance(@QueryParam("sessionid") LensSessionHandle sessionId,
     @PathParam("instanceHandle") SchedulerJobInstanceHandle instanceHandle, @QueryParam("action") String action)
     throws LensException {
@@ -306,6 +346,31 @@ public class ScheduleResource {
       break;
     case RERUN:
       schedulerService.rerunInstance(sessionId, instanceHandle);
+=======
+  public APIResult updateInstance(@QueryParam("sessionid") LensSessionHandle sessionId,
+    @PathParam("instanceHandle") SchedulerJobInstanceHandle instanceHandle,
+    @QueryParam("action") INSTANCE_ACTIONS action) throws LensException {
+    APIResult res = null;
+    validateSession(sessionId);
+    switch (action) {
+    case KILL:
+      if (getSchedulerService().killInstance(sessionId, instanceHandle)) {
+        res = new APIResult(APIResult.Status.SUCCEEDED,
+          "Killing the instance with id " + instanceHandle + " was successful");
+      } else {
+        res = new APIResult(APIResult.Status.FAILED,
+          "Killing the instance with id " + instanceHandle + " was not successful");
+      }
+      break;
+    case RERUN:
+      if (getSchedulerService().rerunInstance(sessionId, instanceHandle)) {
+        res = new APIResult(APIResult.Status.SUCCEEDED,
+          "Rerunning the instance with id " + instanceHandle + " was successful");
+      } else {
+        res = new APIResult(APIResult.Status.FAILED,
+          "Rerunning the instance with id " + instanceHandle + " was not successful");
+      }
+>>>>>>> upstream/current-release-line
       break;
     default:
       throw new UnSupportedOpException(INSTANCE_ACTION.values());
