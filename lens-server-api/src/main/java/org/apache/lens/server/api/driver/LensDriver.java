@@ -23,6 +23,7 @@ import java.io.Externalizable;
 import org.apache.lens.api.Priority;
 import org.apache.lens.api.query.QueryHandle;
 import org.apache.lens.api.query.QueryPrepareHandle;
+import org.apache.lens.server.api.driver.hooks.DriverQueryHook;
 import org.apache.lens.server.api.error.LensException;
 import org.apache.lens.server.api.events.LensEventListener;
 import org.apache.lens.server.api.query.AbstractQueryContext;
@@ -31,6 +32,7 @@ import org.apache.lens.server.api.query.QueryContext;
 import org.apache.lens.server.api.query.collect.WaitingQueriesSelectionPolicy;
 import org.apache.lens.server.api.query.constraint.QueryLaunchingConstraint;
 import org.apache.lens.server.api.query.cost.QueryCost;
+import org.apache.lens.server.api.retry.RetryPolicyDecider;
 
 import org.apache.hadoop.conf.Configuration;
 
@@ -232,4 +234,6 @@ public interface LensDriver extends Externalizable {
    * @return The method of status update supported by this driver.
    */
   StatusUpdateMethod getStatusUpdateMethod();
+
+  RetryPolicyDecider<QueryContext> getRetryPolicyDecider();
 }

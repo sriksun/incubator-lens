@@ -28,13 +28,9 @@ import javax.xml.bind.JAXBException;
 
 import org.apache.lens.api.query.*;
 import org.apache.lens.cube.parse.CubeQueryConfUtil;
-import org.apache.lens.regression.client.SessionResourceTests;
+import org.apache.lens.regression.client.ITSessionResourceTests;
 import org.apache.lens.regression.core.constants.QueryInventory;
-import org.apache.lens.regression.core.helpers.LensServerHelper;
-import org.apache.lens.regression.core.helpers.MetastoreHelper;
-import org.apache.lens.regression.core.helpers.QueryHelper;
 import org.apache.lens.regression.core.helpers.ServiceManagerHelper;
-import org.apache.lens.regression.core.helpers.SessionHelper;
 import org.apache.lens.regression.core.testHelper.BaseTestClass;
 import org.apache.lens.regression.util.Util;
 import org.apache.lens.server.api.LensConfConstants;
@@ -53,15 +49,10 @@ public class ITSessionConfigTests extends BaseTestClass{
   WebTarget servLens;
   String sessionHandleString;
 
-  LensServerHelper lens = getLensServerHelper();
-  MetastoreHelper mHelper = getMetastoreHelper();
-  SessionHelper sHelper = getSessionHelper();
-  QueryHelper qHelper = getQueryHelper();
-
   private static String queryResultParentDirPath = "/tmp/lensreports";
   private String lensConfFilePath = lens.getServerDir() + "/conf/lens-site.xml";
 
-  private static Logger logger = Logger.getLogger(SessionResourceTests.class);
+  private static Logger logger = Logger.getLogger(ITSessionResourceTests.class);
 
   @BeforeClass(alwaysRun = true)
   public void initialize() throws IOException, JSchException, JAXBException, LensException {
@@ -78,7 +69,9 @@ public class ITSessionConfigTests extends BaseTestClass{
   public void restoreConfig() throws JSchException, IOException, JAXBException, LensException{
     qHelper.killQuery(null, "QUEUED", "all");
     qHelper.killQuery(null, "RUNNING", "all");
-    sHelper.closeSession();
+    if (sessionHandleString != null) {
+      sHelper.closeSession();
+    }
   }
 
 
@@ -104,14 +97,6 @@ public class ITSessionConfigTests extends BaseTestClass{
 
     InMemoryQueryResult inmemory = (InMemoryQueryResult) qHelper.getResultSet(queryHandle, "0", "100");
     Assert.assertNotNull(inmemory);
-
-    try {
-      PersistentQueryResult result = (PersistentQueryResult)qHelper.getResultSet(queryHandle, "0", "100");
-      Assert.assertFalse(true);
-    } catch(Exception e){
-      logger.info(e.getMessage().toString());
-    }
-
   }
 
   @Test(enabled=true, dataProvider="query_provider")

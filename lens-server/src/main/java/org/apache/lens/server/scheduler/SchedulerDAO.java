@@ -60,8 +60,9 @@ public class SchedulerDAO {
       this.store.createJobInstanceTable();
       this.store.createJobInstanceRunTable();
     } catch (SQLException e) {
+      // If tables are not created, the DAO operations will fail at runtime.
+      // The APIs will fail with Internal Server Error.
       log.error("Error creating job tables", e);
-      throw new LensException("Error creating job tables ", e);
     } catch (ClassNotFoundException e) {
       log.error("No class found ", e);
       throw new LensException("No class found ", e);
@@ -238,8 +239,8 @@ public class SchedulerDAO {
     try {
       return store.getAllJobInstances(id.getHandleIdString());
     } catch (SQLException e) {
-      log.error("Error while getting instances of a job with id {}" , id.getHandleIdString(), e);
-      return null;
+      log.error("Error while getting instances of a job with id {}", id.getHandleIdString(), e);
+      return new ArrayList<>();
     }
   }
 
@@ -247,17 +248,18 @@ public class SchedulerDAO {
    * Gets all jobs which match the filter requirements.
    *
    * @param username  : User name of the job
-   * @param jobState  : state of the job
    * @param startTime : Created on should be greater than this start time.
    * @param endTime   : Created on should be less than the end time.
+   * @param jobStates : Multiple states of the jobs
    * @return List of Job handles
    */
-  public List<SchedulerJobHandle> getJobs(String username, SchedulerJobState jobState, Long startTime, Long endTime) {
+  public List<SchedulerJobHandle> getJobs(String username, Long startTime, Long endTime,
+    SchedulerJobState... jobStates) {
     try {
-      return store.getJobs(username, jobState == null ? null : jobState.name(), startTime, endTime);
+      return store.getJobs(username, jobStates == null ? new SchedulerJobState[] {} : jobStates, startTime, endTime);
     } catch (SQLException e) {
       log.error("Error while getting jobs ", e);
-      return null;
+      return new ArrayList<>();
     }
   }
 
@@ -272,7 +274,7 @@ public class SchedulerDAO {
       return store.getJobsByName(jobName);
     } catch (SQLException e) {
       log.error("Error while getting jobs ", e);
-      return null;
+      return new ArrayList<>();
     }
   }
 
@@ -287,7 +289,7 @@ public class SchedulerDAO {
       return store.getInstanceRuns(states);
     } catch (SQLException e) {
       log.error("Error while getting jobs ", e);
-      return null;
+      return new ArrayList<>();
     }
   }
 
@@ -478,20 +480,26 @@ public class SchedulerDAO {
      * Gets all the jobs which match the filter requirements.
      *
      * @param username
-     * @param status
+     * @param states
      * @param starttime
      * @param endtime
      * @return the list of job handles.
      * @throws SQLException
      */
-    public List<SchedulerJobHandle> getJobs(String username, String status, Long starttime, Long endtime)
+    public List<SchedulerJobHandle> getJobs(String username, SchedulerJobState[] states, Long starttime, Long endtime)
       throws SQLException {
       String whereClause = "";
       if (username != null && !username.isEmpty()) {
         whereClause += ((whereClause.isEmpty()) ? " WHERE " : " AND ") + COLUMN_USER + " = '" + username + "'";
       }
-      if (status != null && !status.isEmpty()) {
-        whereClause += ((whereClause.isEmpty()) ? " WHERE " : " AND ") + COLUMN_STATUS + " = '" + status + "'";
+      if (states.length > 0) {
+        whereClause += ((whereClause.isEmpty()) ? " WHERE " : " AND ") + COLUMN_STATUS + " IN (";
+        String internalWhere = "";
+        for (SchedulerJobState state : states) {
+          internalWhere += ((internalWhere.isEmpty()) ? "'" : " , '") + state + "'";
+        }
+        whereClause += internalWhere;
+        whereClause += ")";
       }
       if (starttime != null && starttime > 0) {
         whereClause += ((whereClause.isEmpty()) ? " WHERE " : " AND ") + COLUMN_CREATED_ON + " >= " + starttime;
@@ -499,6 +507,7 @@ public class SchedulerDAO {
       if (endtime != null && endtime > 0) {
         whereClause += ((whereClause.isEmpty()) ? " WHERE " : " AND ") + COLUMN_CREATED_ON + " < " + endtime;
       }
+
       String fetchSQL = "SELECT " + COLUMN_ID + " FROM " + JOB_TABLE + whereClause;
       List<Object[]> result = runner.query(fetchSQL, multipleRowsHandler);
       List<SchedulerJobHandle> resOut = new ArrayList<>();
@@ -564,8 +573,9 @@ public class SchedulerDAO {
       SchedulerJobInstanceHandle id = SchedulerJobInstanceHandle.fromString((String) instanceInfo[0]);
       SchedulerJobHandle jobId = SchedulerJobHandle.fromString((String) instanceInfo[1]);
       long createdOn = (Long) instanceInfo[2];
-      // Get the Runs
-      String fetchSQL = "SELECT * FROM " + JOB_INSTANCE_RUN_TABLE + " WHERE " + COLUMN_ID + "=?";
+      // Get the Runs sorted by run id to make sure the last on the list is the latest run.
+      String fetchSQL =
+        "SELECT * FROM " + JOB_INSTANCE_RUN_TABLE + " WHERE " + COLUMN_ID + "=? ORDER BY " + COLUMN_RUN_ID;
       List<Object[]> instanceRuns = runner.query(fetchSQL, multipleRowsHandler, (String) instanceInfo[0]);
       List<SchedulerJobInstanceRun> runList = processInstanceRun(instanceRuns);
       return new SchedulerJobInstanceInfo(id, jobId, createdOn, runList);

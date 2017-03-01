@@ -43,11 +43,6 @@ public class ITListQueryTest extends BaseTestClass {
   WebTarget servLens;
   private String sessionHandleString;
 
-  LensServerHelper lens = getLensServerHelper();
-  MetastoreHelper mHelper = getMetastoreHelper();
-  SessionHelper sHelper = getSessionHelper();
-  QueryHelper qHelper = getQueryHelper();
-
   String jdbcDriver = "jdbc/jdbc1", hiveDriver = "hive/hive1";
   String sleepQuery = QueryInventory.getSleepQuery("5");
 
@@ -57,12 +52,12 @@ public class ITListQueryTest extends BaseTestClass {
   public void initialize() throws IOException, JAXBException, LensException {
     servLens = ServiceManagerHelper.init();
     logger.info("Creating a new Session");
-    sessionHandleString = sHelper.openSession(lens.getCurrentDB());
   }
 
   @BeforeMethod(alwaysRun = true)
   public void setUp(Method method) throws Exception {
     logger.info("Test Name: " + method.getName());
+    sessionHandleString = sHelper.openSession(lens.getCurrentDB());
   }
 
   @AfterMethod(alwaysRun = true)
@@ -70,12 +65,15 @@ public class ITListQueryTest extends BaseTestClass {
     logger.info("Test Name: " + method.getName());
     qHelper.killQuery(null, "QUEUED", "all");
     qHelper.killQuery(null, "RUNNING", "all");
+    if (sessionHandleString != null){
+      sHelper.closeSession();
+    }
+    sessionHandleString = null;
   }
 
   @AfterClass(alwaysRun = true)
   public void closeSession() throws Exception {
     logger.info("Closing Session");
-    sHelper.closeSession();
   }
 
   @DataProvider(name = "query-provider")

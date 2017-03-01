@@ -33,6 +33,9 @@ import org.apache.lens.cube.error.LensCubeErrorCode;
 import org.apache.lens.cube.metadata.FactPartition;
 import org.apache.lens.server.api.error.LensException;
 
+import org.apache.hadoop.conf.Configuration;
+
+import org.mockito.Mockito;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
@@ -50,6 +53,24 @@ public abstract class TestTimeRangeWriter {
 
   public abstract void validateConsecutive(String whereClause, DateFormat format);
 
+  protected CubeQueryContext getMockedCubeContext(boolean betweenOnly) {
+    CubeQueryContext context = Mockito.mock(CubeQueryContext.class);
+    Configuration configuration = new Configuration();
+    configuration.setBoolean(CubeQueryConfUtil.BETWEEN_ONLY_TIME_RANGE_WRITER, betweenOnly);
+    Mockito.when(context.getConf()).thenReturn(configuration);
+    Mockito.when(context.shouldReplaceTimeDimWithPart()).thenReturn(true);
+    return context;
+  }
+
+  protected CubeQueryContext getMockedCubeContextForBounds(String startBoundType, String endBoundType) {
+    CubeQueryContext context = Mockito.mock(CubeQueryContext.class);
+    Configuration configuration = new Configuration();
+    configuration.set(CubeQueryConfUtil.START_DATE_BOUND_TYPE, startBoundType);
+    configuration.set(CubeQueryConfUtil.END_DATE_BOUND_TYPE, endBoundType);
+    Mockito.when(context.getConf()).thenReturn(configuration);
+    Mockito.when(context.shouldReplaceTimeDimWithPart()).thenReturn(true);
+    return context;
+  }
   public void validateSingle(String whereClause, DateFormat format) {
     List<String> parts = new ArrayList<String>();
     if (format == null) {
@@ -74,7 +95,7 @@ public abstract class TestTimeRangeWriter {
     LensException th = null;
     String whereClause = null;
     try {
-      whereClause = getTimerangeWriter().getTimeRangeWhereClause(null, "test", answeringParts);
+      whereClause = getTimerangeWriter().getTimeRangeWhereClause(getMockedCubeContext(false), "test", answeringParts);
     } catch (LensException e) {
       log.error("Semantic exception while testing disjoint parts.", e);
       th = e;
@@ -98,7 +119,7 @@ public abstract class TestTimeRangeWriter {
 
     th = null;
     try {
-      whereClause = getTimerangeWriter().getTimeRangeWhereClause(null, "test", answeringParts);
+      whereClause = getTimerangeWriter().getTimeRangeWhereClause(getMockedCubeContext(false), "test", answeringParts);
     } catch (LensException e) {
       th = e;
     }
@@ -124,7 +145,9 @@ public abstract class TestTimeRangeWriter {
     answeringParts.add(new FactPartition("dt", getDateWithOffset(DAILY, -1), DAILY, null, format));
     answeringParts.add(new FactPartition("dt", getDateWithOffset(DAILY, -2), DAILY, null, format));
     answeringParts.add(new FactPartition("dt", getDateWithOffset(DAILY, 0), DAILY, null, format));
-    String whereClause = getTimerangeWriter().getTimeRangeWhereClause(null, "test", answeringParts);
+
+    String whereClause = getTimerangeWriter().getTimeRangeWhereClause(getMockedCubeContext(false), "test",
+      answeringParts);
     validateConsecutive(whereClause, format);
   }
 
@@ -132,13 +155,15 @@ public abstract class TestTimeRangeWriter {
   public void testSinglePart() throws LensException {
     Set<FactPartition> answeringParts = new LinkedHashSet<FactPartition>();
     answeringParts.add(new FactPartition("dt", getDateWithOffset(DAILY, -1), DAILY, null, null));
-    String whereClause = getTimerangeWriter().getTimeRangeWhereClause(null, "test", answeringParts);
+    String whereClause = getTimerangeWriter().getTimeRangeWhereClause(getMockedCubeContext(false), "test",
+      answeringParts);
     validateSingle(whereClause, null);
 
     answeringParts = new LinkedHashSet<>();
     answeringParts.add(new FactPartition("dt", getDateWithOffset(DAILY, -1), DAILY, null, DB_FORMAT));
-    whereClause = getTimerangeWriter().getTimeRangeWhereClause(null, "test", answeringParts);
+    whereClause = getTimerangeWriter().getTimeRangeWhereClause(getMockedCubeContext(false), "test", answeringParts);
     validateSingle(whereClause, DB_FORMAT);
 
   }
+
 }

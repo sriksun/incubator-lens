@@ -58,7 +58,7 @@ public class MockDriver extends AbstractLensDriver {
   /**
    * The conf.
    */
-  Configuration conf;
+  protected Configuration conf;
 
   /**
    * The query.
@@ -99,6 +99,7 @@ public class MockDriver extends AbstractLensDriver {
     this.conf = conf;
     ioTestVal = conf.getInt("mock.driver.test.val", -1);
     this.conf.addResource(getDriverResourcePath("failing-query-driver-site.xml"));
+    loadQueryHook();
   }
 
   @Override
@@ -179,11 +180,23 @@ public class MockDriver extends AbstractLensDriver {
         throw new LensException(e);
       }
     }
+    if (context.getUserQuery().contains("autocancel")) {
+      if (!cancel) {
+        context.getDriverStatus().setState(DriverQueryState.RUNNING);
+      } else {
+        context.getDriverStatus().setState(DriverQueryState.CANCELED);
+        context.getDriverStatus().setDriverFinishTime(System.currentTimeMillis());
+      }
+      return;
+    }
+
     context.getDriverStatus().setProgress(1.0);
     context.getDriverStatus().setStatusMessage("Done");
     context.getDriverStatus().setState(DriverQueryState.SUCCESSFUL);
+    context.getDriverStatus().setDriverFinishTime(System.currentTimeMillis());
   }
 
+  boolean cancel = false;
   /*
    * (non-Javadoc)
    *
@@ -191,7 +204,8 @@ public class MockDriver extends AbstractLensDriver {
    */
   @Override
   public boolean cancelQuery(QueryHandle handle) throws LensException {
-    return false;
+    cancel = true;
+    return true;
   }
 
   /*
@@ -318,6 +332,7 @@ public class MockDriver extends AbstractLensDriver {
    */
   @Override
   public void executeAsync(QueryContext context) throws LensException {
+    cancel = false;
     this.query = context.getSelectedDriverQuery();
   }
 

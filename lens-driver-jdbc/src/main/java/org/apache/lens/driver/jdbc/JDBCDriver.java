@@ -23,7 +23,6 @@ import static java.util.Arrays.asList;
 
 import static org.apache.lens.driver.jdbc.JDBCDriverConfConstants.*;
 import static org.apache.lens.driver.jdbc.JDBCDriverConfConstants.ConnectionPoolProperties.*;
-import static org.apache.lens.server.api.util.LensUtil.getImplementations;
 
 import static com.google.common.base.Preconditions.checkState;
 
@@ -51,9 +50,7 @@ import org.apache.lens.server.api.metrics.MethodMetricsFactory;
 import org.apache.lens.server.api.query.AbstractQueryContext;
 import org.apache.lens.server.api.query.PreparedQueryContext;
 import org.apache.lens.server.api.query.QueryContext;
-import org.apache.lens.server.api.query.collect.WaitingQueriesSelectionPolicy;
 import org.apache.lens.server.api.query.constraint.MaxConcurrentDriverQueriesConstraintFactory;
-import org.apache.lens.server.api.query.constraint.QueryLaunchingConstraint;
 import org.apache.lens.server.api.query.cost.FactPartitionBasedQueryCost;
 import org.apache.lens.server.api.query.cost.QueryCost;
 import org.apache.lens.server.api.query.rewrite.QueryRewriter;
@@ -67,8 +64,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.ql.parse.ASTNode;
 import org.apache.hadoop.hive.ql.parse.HiveParser;
-
-import com.google.common.collect.ImmutableSet;
 
 import lombok.*;
 import lombok.extern.slf4j.Slf4j;
@@ -95,22 +90,15 @@ public class JDBCDriver extends AbstractLensDriver {
   @Getter
   private ConcurrentHashMap<QueryHandle, JdbcQueryContext> queryContextMap;
 
-  /** The conf. */
-  private Configuration conf;
-
   /** Configuration for estimate connection pool */
   private Configuration estimateConf;
   /** Estimate connection provider */
   private ConnectionProvider estimateConnectionProvider;
 
   private LogSegregationContext logSegregationContext;
-  private DriverQueryHook queryHook;
-
-  @Getter
-  private ImmutableSet<QueryLaunchingConstraint> queryConstraints;
-  private ImmutableSet<WaitingQueriesSelectionPolicy> selectionPolicies;
 
   private boolean isStatementCancelSupported;
+
   /**
    * Data related to a query submitted to JDBCDriver.
    */
@@ -292,18 +280,18 @@ public class JDBCDriver extends AbstractLensDriver {
             if (queryContext.getLensContext().getDriverStatus().isCanceled()) {
               return result;
             }
-            queryContext.getLensContext().getDriverStatus().setResultSetAvailable(isResultAvailable);
-            queryContext.getLensContext().setDriverStatus(DriverQueryState.SUCCESSFUL);
             if (isResultAvailable) {
               result.resultSet = stmt.getResultSet();
             }
+            queryContext.getLensContext().getDriverStatus().setResultSetAvailable(isResultAvailable);
+            queryContext.getLensContext().setDriverStatus(DriverQueryState.SUCCESSFUL);
           } catch (Exception e) {
             if (queryContext.getLensContext().getDriverStatus().isCanceled()) {
               return result;
             }
             if (queryContext.isClosed()) {
               log.info("Ignored exception on already closed query : {} - {}",
-                queryContext.getLensContext().getQueryHandle(), e.getMessage());
+                queryContext.getLensContext().getQueryHandle(), e.getMessage(), e);
             } else {
               log.error("Error executing SQL query: {} reason: {}", queryContext.getLensContext().getQueryHandle(),
                 e.getMessage(), e);
@@ -321,6 +309,7 @@ public class JDBCDriver extends AbstractLensDriver {
           queryContext.getLensContext().getDriverStatus().setDriverFinishTime(System.currentTimeMillis());
         }
       }
+
       return result;
     }
 
@@ -383,14 +372,6 @@ public class JDBCDriver extends AbstractLensDriver {
     }
   }
 
-  /**
-   * Get driver configuration
-   */
-  @Override
-  public Configuration getConf() {
-    return conf;
-  }
-
   /*
    * (non-Javadoc)
    *
@@ -399,17 +380,7 @@ public class JDBCDriver extends AbstractLensDriver {
   @Override
   public void configure(Configuration conf, String driverType, String driverName) throws LensException {
     super.configure(conf, driverType, driverName);
-    this.conf = new Configuration(conf);
-    this.conf.addResource("jdbcdriver-default.xml");
-    this.conf.addResource(getDriverResourcePath("jdbcdriver-site.xml"));
-    init(conf);
-    try {
-      queryHook = this.conf.getClass(
-        JDBC_QUERY_HOOK_CLASS, NoOpDriverQueryHook.class, DriverQueryHook.class
-      ).newInstance();
-    } catch (InstantiationException | IllegalAccessException e) {
-      throw new LensException("Can't instantiate driver query hook for hivedriver with given class", e);
-    }
+    init();
     configured = true;
     log.info("JDBC Driver {} configured", getFullyQualifiedName());
   }
@@ -417,14 +388,12 @@ public class JDBCDriver extends AbstractLensDriver {
   /**
    * Inits the.
    *
-   * @param conf the conf
    * @throws LensException the lens exception
    */
-  protected void init(Configuration conf) throws LensException {
-
-    final int maxPoolSize = parseInt(this.conf.get(JDBC_POOL_MAX_SIZE.getConfigKey()));
+  public void init() throws LensException {
+    final int maxPoolSize = parseInt(getConf().get(JDBC_POOL_MAX_SIZE.getConfigKey()));
     final int maxConcurrentQueries
-      = parseInt(this.conf.get(MaxConcurrentDriverQueriesConstraintFactory.MAX_CONCURRENT_QUERIES_KEY));
+      = parseInt(getConf().get(MaxConcurrentDriverQueriesConstraintFactory.MAX_CONCURRENT_QUERIES_KEY));
     checkState(maxPoolSize >= maxConcurrentQueries, "maxPoolSize:" + maxPoolSize + " maxConcurrentQueries:"
       + maxConcurrentQueries);
 
@@ -438,7 +407,7 @@ public class JDBCDriver extends AbstractLensDriver {
       }
     });
 
-    Class<? extends ConnectionProvider> cpClass = conf.getClass(JDBC_CONNECTION_PROVIDER,
+    Class<? extends ConnectionProvider> cpClass = getConf().getClass(JDBC_CONNECTION_PROVIDER,
       DataSourceConnectionProvider.class, ConnectionProvider.class);
     try {
       connectionProvider = cpClass.newInstance();
@@ -448,9 +417,8 @@ public class JDBCDriver extends AbstractLensDriver {
       throw new LensException(e);
     }
     this.logSegregationContext = new MappedDiagnosticLogSegregationContext();
-    this.queryConstraints = getImplementations(QUERY_LAUNCHING_CONSTRAINT_FACTORIES_KEY, this.conf);
-    this.selectionPolicies = getImplementations(WAITING_QUERIES_SELECTION_POLICY_FACTORIES_KEY, this.conf);
-    this.isStatementCancelSupported = conf.getBoolean(STATEMENT_CANCEL_SUPPORTED, DEFAULT_STATEMENT_CANCEL_SUPPORTED);
+    this.isStatementCancelSupported = getConf().getBoolean(STATEMENT_CANCEL_SUPPORTED,
+      DEFAULT_STATEMENT_CANCEL_SUPPORTED);
   }
 
   /**
@@ -468,7 +436,7 @@ public class JDBCDriver extends AbstractLensDriver {
     try {
       // Add here to cover the path when the queries are executed it does not
       // use the driver conf
-      return connectionProvider.getConnection(conf);
+      return connectionProvider.getConnection(getConf());
     } catch (SQLException e) {
       throw new LensException(e);
     }
@@ -482,7 +450,7 @@ public class JDBCDriver extends AbstractLensDriver {
    */
   protected QueryRewriter getQueryRewriter() throws LensException {
     QueryRewriter rewriter;
-    Class<? extends QueryRewriter> queryRewriterClass = conf.getClass(JDBC_QUERY_REWRITER_CLASS,
+    Class<? extends QueryRewriter> queryRewriterClass = getConf().getClass(JDBC_QUERY_REWRITER_CLASS,
       DummyQueryRewriter.class, QueryRewriter.class);
     try {
       rewriter = queryRewriterClass.newInstance();
@@ -491,7 +459,7 @@ public class JDBCDriver extends AbstractLensDriver {
       log.error("{} Unable to create rewriter object", getFullyQualifiedName(), e);
       throw new LensException(e);
     }
-    rewriter.init(conf);
+    rewriter.init(getConf());
     return rewriter;
   }
 
@@ -673,7 +641,7 @@ public class JDBCDriver extends AbstractLensDriver {
   // Get connection config used by estimate pool.
   protected final Configuration getEstimateConnectionConf() {
     if (estimateConf == null) {
-      Configuration tmpConf = new Configuration(conf);
+      Configuration tmpConf = new Configuration(getConf());
       // Override JDBC settings in estimate conf, if set by user explicitly. Otherwise fall back to default JDBC pool
       // config
       for (String key : asList(JDBC_CONNECTION_PROPERTIES, JDBC_DB_URI, JDBC_DRIVER_CLASS, JDBC_USER, JDBC_PASSWORD,
@@ -761,7 +729,8 @@ public class JDBCDriver extends AbstractLensDriver {
     try {
       conn = calledForEstimate ? getEstimateConnection() : getConnection();
       stmt = conn.prepareStatement(rewrittenQuery);
-      if (stmt.getWarnings() != null) {
+      if (!pContext.getDriverConf(this).getBoolean(JDBC_VALIDATE_SKIP_WARNINGS,
+        DEFAULT_JDBC_VALIDATE_SKIP_WARNINGS) && stmt.getWarnings() != null) {
         throw new LensException(stmt.getWarnings());
       }
     } catch (SQLException sql) {
@@ -886,7 +855,6 @@ public class JDBCDriver extends AbstractLensDriver {
     queryContext.setPrepared(false);
     queryContext.setRewrittenQuery(rewrittenQuery);
     return new QueryCallable(queryContext, logSegregationContext).call();
-    // LOG.info("Execute " + context.getQueryHandle());
   }
 
   /**
@@ -929,51 +897,40 @@ public class JDBCDriver extends AbstractLensDriver {
       return;
     }
     if (ctx.getResultFuture().isCancelled()) {
-      context.getDriverStatus().setProgress(1.0);
-      context.getDriverStatus().setState(DriverQueryState.CANCELED);
-      context.getDriverStatus().setStatusMessage("Query Canceled");
+      if (!context.getDriverStatus().isCanceled()) {
+        context.getDriverStatus().setProgress(1.0);
+        context.getDriverStatus().setState(DriverQueryState.CANCELED);
+        context.getDriverStatus().setStatusMessage("Query Canceled");
+      }
     } else if (ctx.getResultFuture().isDone()) {
       context.getDriverStatus().setProgress(1.0);
       // Since future is already done, this call should not block
       if (ctx.getQueryResult() != null && ctx.getQueryResult().error != null) {
-        context.getDriverStatus().setState(DriverQueryState.FAILED);
-        context.getDriverStatus().setStatusMessage("Query execution failed!");
-        context.getDriverStatus().setErrorMessage(ctx.getQueryResult().error.getMessage());
+        if (!context.getDriverStatus().isFailed()) {
+          context.getDriverStatus().setState(DriverQueryState.FAILED);
+          context.getDriverStatus().setStatusMessage("Query execution failed!");
+          context.getDriverStatus().setErrorMessage(ctx.getQueryResult().error.getMessage());
+        }
       } else {
-        context.getDriverStatus().setState(DriverQueryState.SUCCESSFUL);
-        context.getDriverStatus().setStatusMessage(context.getQueryHandle() + " successful");
-        context.getDriverStatus().setResultSetAvailable(true);
+        if (!context.getDriverStatus().isFinished()) {
+          // assuming successful
+          context.getDriverStatus().setState(DriverQueryState.SUCCESSFUL);
+          context.getDriverStatus().setStatusMessage(context.getQueryHandle() + " successful");
+          context.getDriverStatus().setResultSetAvailable(true);
+        }
       }
     } else {
-      context.getDriverStatus().setState(DriverQueryState.RUNNING);
-      context.getDriverStatus().setStatusMessage(context.getQueryHandle() + " is running");
+      if (!context.getDriverStatus().isRunning()) {
+        context.getDriverStatus().setState(DriverQueryState.RUNNING);
+        context.getDriverStatus().setStatusMessage(context.getQueryHandle() + " is running");
+      }
     }
   }
 
   @Override
   protected LensResultSet createResultSet(QueryContext ctx) throws LensException {
     checkConfigured();
-    return getDriverResult(ctx);
-  }
-
-  private LensResultSet getDriverResult(QueryContext context) throws LensException {
-    JdbcQueryContext ctx = getQueryContext(context.getQueryHandle());
-    if (ctx.getLensContext().getDriverStatus().isCanceled()) {
-      throw new LensException("Result set not available for canceled query " + context.getQueryHandle());
-    }
-
-    Future<QueryResult> future = ctx.getResultFuture();
-    QueryHandle queryHandle = context.getQueryHandle();
-
-    try {
-      return future.get().getLensResultSet(true);
-    } catch (InterruptedException e) {
-      throw new LensException("Interrupted while getting resultset for query " + queryHandle.getHandleId(), e);
-    } catch (ExecutionException e) {
-      throw new LensException("Error while executing query " + queryHandle.getHandleId() + " in background", e);
-    } catch (CancellationException e) {
-      throw new LensException("Query was already canceled " + queryHandle.getHandleId(), e);
-    }
+    return getQueryContext(ctx.getQueryHandle()).getQueryResult().getLensResultSet(true);
   }
 
   /**
@@ -1070,11 +1027,6 @@ public class JDBCDriver extends AbstractLensDriver {
 
   }
 
-  @Override
-  public ImmutableSet<WaitingQueriesSelectionPolicy> getWaitingQuerySelectionPolicies() {
-    return this.selectionPolicies;
-  }
-
   /*
    * (non-Javadoc)
    *
@@ -1094,11 +1046,6 @@ public class JDBCDriver extends AbstractLensDriver {
   @Override
   public void writeExternal(ObjectOutput arg0) throws IOException {
     // TODO Auto-generated method stub
-  }
-
-  @Override
-  public DriverQueryHook getQueryHook() {
-    return queryHook;
   }
 
   @Override

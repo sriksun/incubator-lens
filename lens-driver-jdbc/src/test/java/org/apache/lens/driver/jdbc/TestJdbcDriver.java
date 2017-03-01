@@ -446,11 +446,11 @@ public class TestJdbcDriver {
 
     //new query shouldn't be allowed
     QueryContext newcontext = createQueryContext("SELECT 123 FROM max_connection_test");
-    assertFalse(constraint.allowsLaunchOf(newcontext, null));
+    assertNotNull(constraint.allowsLaunchOf(newcontext, null));
 
     //close one query and launch the previous query again
     driver.closeQuery(context.getQueryHandle());
-    assertTrue(constraint.allowsLaunchOf(newcontext, null));
+    assertNull(constraint.allowsLaunchOf(newcontext, null));
     close();
   }
 
@@ -496,6 +496,9 @@ public class TestJdbcDriver {
     QueryContext context = createQueryContext(query, conf);
     context.setExecuteTimeoutMillis(executeTimeoutMillis);
     driver.executeAsync(context);
+    while (!context.getDriverStatus().isFinished()) {
+      Thread.sleep(1000);
+    }
     LensResultSet resultSet = driver.fetchResultSet(context);
     assertNotNull(resultSet);
 
@@ -658,6 +661,28 @@ public class TestJdbcDriver {
     } catch (LensException ex) {
       Assert.assertEquals(LensUtil.getCauseMessage(ex), "user lacks privilege or object not found: PREPARE_TEST2");
     }
+  }
+
+  /**
+   * Test prepare skip warnings
+   *
+   * @throws Exception the exception
+   */
+  @Test
+  public void testPrepareSkipWarnings() throws Exception {
+    createTable("prepare_test3");
+    createTable("prepare_test3", driver.getEstimateConnection());
+    insertData("prepare_test3");
+    insertData("prepare_test3", driver.getEstimateConnection());
+
+    final String query = "SELECT * from prepare_test3";
+
+    PreparedQueryContext pContext = new PreparedQueryContext(query, "SA", baseConf, drivers);
+    pContext.getDriverConf(driver).setBoolean(JDBC_VALIDATE_SKIP_WARNINGS, true);
+    //run validate
+    driver.validate(pContext);
+    //run prepare
+    driver.prepare(pContext);
   }
 
   /**
@@ -831,6 +856,7 @@ public class TestJdbcDriver {
 
   public static int sleep(int t) {
     try {
+      log.info("Sleeping for {} seconds", t);
       Thread.sleep(t * 1000);
     } catch (InterruptedException ie) {
       // ignore
@@ -875,7 +901,7 @@ public class TestJdbcDriver {
     QueryHandle handle = context.getQueryHandle();
     // without wait query may not be launched.
     if (waitBeforeCancel) {
-      Thread.sleep(100);
+      Thread.sleep(1000);
     }
     boolean isCancelled = driver.cancelQuery(handle);
     driver.updateStatus(context);

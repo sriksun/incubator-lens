@@ -263,8 +263,16 @@
     <name>lens.query.http.notification.urls</name>
     <value></value>
     <description>These are the http end points for Query http notifications. Users can specify more than one comma
-      separated end points for a query. If this property is not set, no http notification will be sent out by lens
+      separated end points for a query. Url parameter values that include special characters should be
+      encoded. Please note that if this property is not set, no http notification will be sent out by lens
       server for the query.</description>
+  </property>
+
+  <property>
+    <name>lens.query.timeout.millis</name>
+    <value>86400000</value>
+    <description>The runtime(millis) of the query after which query will be timedout and cancelled. Default is 1 day.
+    </description>
   </property>
 
   <!--  properties for session -->
@@ -363,6 +371,13 @@
     <name>lens.cube.query.fail.if.data.partial</name>
     <value>true</value>
     <description>Whether to fail the query of data is partial</description>
+  </property>
+
+  <property>
+    <name>lens.cube.query.completeness.threshold</name>
+    <value>100</value>
+    <description>The query will fail if data completeness is less than the set threshold given that the flag
+      "lens.cube.query.fail.if.data.partial" is set as true</description>
   </property>
 
   <property>

@@ -20,7 +20,11 @@ package org.apache.lens.server.api;
 
 import javax.ws.rs.core.MediaType;
 
+import org.apache.lens.api.parse.Parser;
 import org.apache.lens.server.api.error.LensException;
+import org.apache.lens.server.api.metastore.*;
+import org.apache.lens.server.api.query.cost.FactPartitionBasedQueryCost;
+import org.apache.lens.server.api.query.cost.QueryCost;
 
 /**
  * The Class LensConfConstants.
@@ -98,7 +102,7 @@ public final class LensConfConstants {
 
   public static final String MAX_SESSIONS_PER_USER = SERVER_PFX + "max.sessions.per.user";
 
-  public static final String QUERY_COMPARATOR_CLASS = SERVER_PFX + "query.comparator.class";
+  public static final String QUERY_COMPARATOR_CLASSES = SERVER_PFX + "query.comparator.classes";
 
   public static final Integer DEFAULT_MAX_SESSIONS_PER_USER = 10;
 
@@ -913,8 +917,9 @@ public final class LensConfConstants {
   /**
    * Key to get the implementations of query constraint factories.
    */
+  public static final String QUERY_LAUNCHING_CONSTRAINT_FACTORIES_SFX = "query.launching.constraint.factories";
   public static final String QUERY_LAUNCHING_CONSTRAINT_FACTORIES_KEY = SERVER_PFX
-    + "query.launching.constraint.factories";
+    + QUERY_LAUNCHING_CONSTRAINT_FACTORIES_SFX;
 
   /**
    * Key to get the total query cost ceiling per user.
@@ -925,8 +930,10 @@ public final class LensConfConstants {
   /**
    * Key to get the implementations of waiting queries selection policy factories.
    */
+  public static final String WAITING_QUERIES_SELECTION_POLICY_FACTORIES_SFX =
+    "waiting.queries.selection.policy.factories";
   public static final String WAITING_QUERIES_SELECTION_POLICY_FACTORIES_KEY = SERVER_PFX
-      + "waiting.queries.selection.policy.factories";
+      + WAITING_QUERIES_SELECTION_POLICY_FACTORIES_SFX;
 
   /**
    * Key denoting the dialect class property of saved query service.
@@ -952,6 +959,18 @@ public final class LensConfConstants {
    * The driver weight property
    */
   public static final String DRIVER_WEIGHT = DRIVER_PFX + "weight";
+
+  /**
+   * Key for specifying Retry policy class
+   */
+  public static final String RETRY_POLICY_CLASSES_SFX = "query.retry.policy.classes";
+
+  public static final String QUERY_RETRY_POLICY_CLASSES = SERVER_PFX + RETRY_POLICY_CLASSES_SFX;
+
+  /**
+   * Driver hook property
+   */
+  public static final String DRIVER_HOOK_CLASSES_SFX = "query.hook.classes";
 
   /**
    * Default driver weight
@@ -1150,6 +1169,25 @@ public final class LensConfConstants {
   public static final String QUERY_HTTP_NOTIFICATION_TYPE_FINISHED = QUERY_HTTP_NOTIFICATION_TYPE_PFX + "FINISHED";
 
   /**
+   * This is the property to specify the timeout for a query after running for configured time.
+   */
+  public static final String QUERY_TIMEOUT_MILLIS = QUERY_PFX + "timeout.millis";
+
+  /**
+   * This is the default timeout for query to get killed after running for configured time.
+   */
+  public static final int DEFAULT_QUERY_TIMEOUT_MILLIS = 24 * 60 * 60 * 1000; // 1day
+
+  /**
+   * Specifies how often query expiry will run
+   */
+  public static final String QUERY_EXPIRY_INTERVAL_MILLIS = SERVER_PFX + "query.expiry.check.interval.millis";
+  /**
+   * Default value for query expiry interval
+   */
+  public static final long DEFAULT_QUERY_EXPIRY_INTERVAL_MILLIS = 1 * 60 * 60 * 1000; // 1 hour
+
+  /**
    * The Constant GRIZZLY_CORE_POOL_SIZE.
    */
   public static final String GRIZZLY_CORE_POOL_SIZE = SERVER_PFX + "grizzly.core.pool.size";
@@ -1169,4 +1207,50 @@ public final class LensConfConstants {
    */
   public static final int DEFAULT_GRIZZLY_MAX_POOL_SIZE = 40;
 
+  /**
+   * Thread interval for checking the waiting instances
+   */
+  public static final String SCHEDULED_INSTANCE_WAITING_THREAD_INTERVAL_MILLIS =
+    SERVER_PFX + "scheduler.instance.waiting.thread.interval";
+
+  /**
+   * Default waiting thread interval in milliseconds
+   */
+  public static final long DEFAULT_SCHEDULED_INSTANCE_WAITING_THREAD_INTERVAL_MILLIS = 60 * 5 * 1000;
+
+  /**
+   * Default value is less than zero, that means an user can scheduler unlimited number of jobs.
+   */
+  public static final int DEFAULT_MAX_SCHEDULED_JOB_PER_USER = -1;
+
+  public static final String QUERY_COST_PARSER = SERVER_PFX + "query.cost.parser.class";
+  public static final Class<? extends Parser<? extends QueryCost>> DEFAULT_QUERY_COST_PARSER
+    = FactPartitionBasedQueryCost.Parser.class;
+
+  /**
+   * Maximum number of scheduled job per user.
+   */
+  public static final String MAX_SCHEDULED_JOB_PER_USER  = SERVER_PFX + "scheduler.max.job.per.user";
+
+  /**
+   * The class that implements the DataCompletenessChecker Interface. This will take effect if the flag
+   * "lens.cube.metastore.enable.datacompleteness.check" is set.
+   */
+  public static final String COMPLETENESS_CHECKER_CLASS = "lens.cube.metastore.completeness.checker.class";
+
+  /**
+   * The default implementation of DataCompletenessChecker
+   */
+  public static final Class<? extends DataCompletenessChecker> DEFAULT_COMPLETENESS_CHECKER =
+          DefaultChecker.class.asSubclass(DataCompletenessChecker.class);
+
+  /**
+   * This property is to enable Data Completeness Checks while resolving partitions.
+   */
+  public static final String ENABLE_DATACOMPLETENESS_CHECK = "lens.cube.metastore.enable.datacompleteness.check";
+
+  /**
+   * Default Value of the config "lens.cube.metastore.enable.datacompleteness.check"
+   */
+  public static final boolean DEFAULT_ENABLE_DATACOMPLETENESS_CHECK = false;
 }

@@ -139,13 +139,13 @@ public class TimeRangeChecker implements ContextRewriter {
 
   private void doColLifeValidation(CubeQueryContext cubeql) throws LensException,
       ColUnAvailableInTimeRangeException {
-    Set<String> cubeColumns = cubeql.getColumnsQueried(cubeql.getCube().getName());
+    Set<String> cubeColumns = cubeql.getColumnsQueriedForTable(cubeql.getCube().getName());
     if (cubeColumns == null || cubeColumns.isEmpty()) {
       // Query doesn't have any columns from cube
       return;
     }
 
-    for (String col : cubeql.getColumnsQueried(cubeql.getCube().getName())) {
+    for (String col : cubeql.getColumnsQueriedForTable(cubeql.getCube().getName())) {
       CubeColumn column = cubeql.getCube().getColumnByName(col);
       for (TimeRange range : cubeql.getTimeRanges()) {
         if (column == null) {
@@ -156,24 +156,6 @@ public class TimeRangeChecker implements ContextRewriter {
         }
         if (!column.isColumnAvailableInTimeRange(range)) {
           throwException(column);
-        }
-      }
-    }
-
-    // Look at referenced columns through denormalization resolver
-    // and do column life validation
-    Map<String, Set<DenormalizationResolver.ReferencedQueriedColumn>> refCols =
-        cubeql.getDeNormCtx().getReferencedCols();
-    for (String col : refCols.keySet()) {
-      Iterator<DenormalizationResolver.ReferencedQueriedColumn> refColIter = refCols.get(col).iterator();
-      while (refColIter.hasNext()) {
-        DenormalizationResolver.ReferencedQueriedColumn refCol = refColIter.next();
-        for (TimeRange range : cubeql.getTimeRanges()) {
-          if (!refCol.col.isColumnAvailableInTimeRange(range)) {
-            log.debug("The refernced column: {} is not in the range queried", refCol.col.getName());
-            refColIter.remove();
-            break;
-          }
         }
       }
     }

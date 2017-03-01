@@ -28,6 +28,7 @@ import java.util.List;
 import javax.sql.DataSource;
 
 import org.apache.lens.api.LensConf;
+import org.apache.lens.api.query.FailedAttempt;
 import org.apache.lens.api.query.QueryHandle;
 import org.apache.lens.api.query.QueryStatus;
 import org.apache.lens.server.api.error.LensException;
@@ -45,6 +46,7 @@ import org.apache.commons.dbutils.handlers.BeanHandler;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 
+import com.google.common.collect.Lists;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -94,13 +96,25 @@ public class LensServerDAO {
       + "metadata varchar(100000), " + "rows int, " + "filesize bigint, " + "errormessage varchar(10000), "
       + "driverstarttime bigint, " + "driverendtime bigint, " + "drivername varchar(10000), "
       + "queryname varchar(255), " + "submissiontime bigint, " + "driverquery varchar(1000000), "
-      + "conf varchar(100000))";
+      + "conf varchar(100000), numfailedattempts int)";
     try {
       QueryRunner runner = new QueryRunner(ds);
       runner.update(sql);
       log.info("Created finished queries table");
     } catch (SQLException e) {
       log.warn("Unable to create finished queries table", e);
+    }
+  }
+  public void createFailedAttemptsTable() throws Exception {
+    String sql = "CREATE TABLE if not exists failed_attempts (handle varchar(255) not null,"
+      + "attempt_number int, drivername varchar(10000), progress float, progressmessage varchar(10000), "
+      + "errormessage varchar(10000), driverstarttime bigint, driverendtime bigint)";
+    try {
+      QueryRunner runner = new QueryRunner(ds);
+      runner.update(sql);
+      log.info("Created failed_attempts table");
+    } catch (SQLException e) {
+      log.error("Unable to create failed_attempts table", e);
     }
   }
 
@@ -114,19 +128,27 @@ public class LensServerDAO {
     FinishedLensQuery alreadyExisting = getQuery(query.getHandle());
     if (alreadyExisting == null) {
       // The expected case
-      Connection conn = null;
       String sql = "insert into finished_queries (handle, userquery, submitter, priority, "
         + "starttime,endtime,result,status,metadata,rows,filesize,"
-        + "errormessage,driverstarttime,driverendtime, drivername, queryname, submissiontime, driverquery, conf)"
-        + " values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        + "errormessage,driverstarttime,driverendtime, drivername, queryname, submissiontime, driverquery, conf, "
+        + "numfailedattempts)"
+        + " values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+      Connection conn = null;
       try {
         conn = getConnection();
+        conn.setAutoCommit(false);
         QueryRunner runner = new QueryRunner();
         runner.update(conn, sql, query.getHandle(), query.getUserQuery(), query.getSubmitter(), query.getPriority(),
             query.getStartTime(), query.getEndTime(), query.getResult(), query.getStatus(), query.getMetadata(),
             query.getRows(), query.getFileSize(), query.getErrorMessage(), query.getDriverStartTime(),
             query.getDriverEndTime(), query.getDriverName(), query.getQueryName(), query.getSubmissionTime(),
-            query.getDriverQuery(), serializeConf(query.getConf()));
+            query.getDriverQuery(), serializeConf(query.getConf()),
+            query.getFailedAttempts() == null ? 0 : query.getFailedAttempts().size());
+        if (query.getFailedAttempts() != null) {
+          for (int i = 0; i < query.getFailedAttempts().size(); i++) {
+            insertFailedAttempt(runner, conn, query.getHandle(), query.getFailedAttempts().get(i), i);
+          }
+        }
         conn.commit();
       } finally {
         DbUtils.closeQuietly(conn);
@@ -143,6 +165,50 @@ public class LensServerDAO {
       }
     }
   }
+  /**
+   * DAO method to insert a new Finished query into Table.
+   *
+   *
+   * @param runner
+   * @param conn
+   *@param handle to be inserted
+   * @param index   @throws SQLException the exception
+   */
+  public void insertFailedAttempt(QueryRunner runner, Connection conn, String handle, FailedAttempt attempt, int index)
+    throws SQLException {
+    String sql = "insert into failed_attempts(handle, attempt_number, drivername, progress, progressmessage, "
+      + "errormessage, driverstarttime, driverendtime) values (?, ?, ?, ?, ?, ?, ?, ?)";
+    runner.update(conn, sql, handle, index, attempt.getDriverName(),
+      attempt.getProgress(), attempt.getProgressMessage(), attempt.getErrorMessage(),
+      attempt.getDriverStartTime(), attempt.getDriverFinishTime());
+  }
+
+  public void getFailedAttempts(final FinishedLensQuery query) {
+    if (query != null) {
+      String handle = query.getHandle();
+      ResultSetHandler<List<FailedAttempt>> rsh = new BeanHandler<List<FailedAttempt>>(null) {
+        @Override
+        public List<FailedAttempt> handle(ResultSet rs) throws SQLException {
+          List<FailedAttempt> attempts = Lists.newArrayList();
+          while (rs.next()) {
+            FailedAttempt attempt = new FailedAttempt(rs.getString(3), rs.getDouble(4), rs.getString(5),
+              rs.getString(6), rs.getLong(7), rs.getLong(8));
+            attempts.add(attempt);
+          }
+          return attempts;
+        }
+      };
+      String sql = "select * from failed_attempts where handle=? order by attempt_number";
+      QueryRunner runner = new QueryRunner(ds);
+      try {
+        query.setFailedAttempts(runner.query(sql, rsh, handle));
+      } catch (SQLException e) {
+        log.error("SQL exception while executing query.", e);
+      }
+    }
+  }
+
+
 
   private String serializeConf(LensConf conf) {
     return Base64.encodeBase64String(conf.toXMLString().getBytes(Charset.defaultCharset()));
@@ -165,7 +231,9 @@ public class LensServerDAO {
     String sql = "select * from finished_queries where handle=?";
     QueryRunner runner = new QueryRunner(ds);
     try {
-      return runner.query(sql, rsh, handle);
+      FinishedLensQuery finishedQuery = runner.query(sql, rsh, handle);
+      getFailedAttempts(finishedQuery);
+      return finishedQuery;
     } catch (SQLException e) {
       log.error("SQL exception while executing query.", e);
     }

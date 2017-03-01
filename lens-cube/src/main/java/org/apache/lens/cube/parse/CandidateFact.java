@@ -86,6 +86,9 @@ public class CandidateFact implements CandidateTable, QueryAST {
   private final Map<TimeRange, Map<String, LinkedHashSet<FactPartition>>> rangeToStoragePartMap = new HashMap<>();
   @Getter
   private final Map<TimeRange, Map<String, String>> rangeToStorageWhereMap = new HashMap<>();
+  @Getter
+  @Setter
+  private Map<String, Map<String, Float>> dataCompletenessMap;
 
   CandidateFact(CubeFactTable fact, CubeInterface cube) {
     this.fact = fact;
@@ -193,7 +196,7 @@ public class CandidateFact implements CandidateTable, QueryAST {
           dimFieldIndices.add(i);
         }
         ASTNode aliasNode = HQLParser.findNodeByPath(selectExpr, Identifier);
-        String alias = cubeql.getSelectAlias(i);
+        String alias = cubeql.getSelectPhrases().get(i).getSelectAlias();
         if (aliasNode != null) {
           String queryAlias = aliasNode.getText();
           if (!queryAlias.equals(alias)) {
